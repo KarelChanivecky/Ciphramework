@@ -34,7 +34,8 @@ enum cplib_base_error_codes {
     CPLIB_ERR_CIPHER,
     CPLIB_ERR_MEM,
     CPLIB_ERR_ARG,
-    CPLIB_ERR_OS
+    CPLIB_ERR_OS,
+    CPLIB_ERR_FILE,
 };
 
 enum cplib_block_position {
@@ -44,9 +45,12 @@ enum cplib_block_position {
 };
 
 enum cplib_proc_type {
+    CPLIB_PROC_NONE,
     CPLIB_PROC_ENCRYPT,
     CPLIB_PROC_DECRYPT
 };
+
+#define CPLIB_CLOSED_FD (-2)
 
 // ------------------------------------------------------------------------
 struct cplib_cipher_base_t;

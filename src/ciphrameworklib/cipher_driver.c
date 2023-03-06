@@ -26,7 +26,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     cplib_mode_base_t *mode;
     cplib_writer_base_t *writer;
 
-    block_iterator= self->block_iterator;
+    block_iterator = self->block_iterator;
     key_provider = self->key_provider;
     block_padder = self->block_padder;
     mode = self->mode;

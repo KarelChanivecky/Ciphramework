@@ -132,7 +132,7 @@ cplib_block_padder_base_t *cplib_pkcs5_padder_new(enum cplib_proc_type process_t
 
 // ------------------------------------------------------------------------
 
-cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_t * data, size_t iterated_size);
+cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_t *data, size_t iterated_size);
 
 // ------------------------------------------------------------------------
 
@@ -140,19 +140,18 @@ struct cplib_file_writer_t;
 
 struct cplib_file_writer_t {
     cplib_writer_base_t;
-    cplib_mem_chunk_t *file_path;
     int fd;
 };
 
 typedef struct cplib_file_writer_t cplib_file_writer_t;
 
-cplib_file_writer_t *cplib_file_writer_new(cplib_mem_chunk_t *file_path);
+cplib_file_writer_t *cplib_file_writer_new(int fd);
 
 int file_writer_destroy(cplib_file_writer_t *self);
 
 // ------------------------------------------------------------------------
 
-cplib_block_iterator_base_t *cplib_file_block_iterator_new(cplib_mem_chunk_t *file_path,
+cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
                                                            size_t iterated_size,
                                                            size_t buffer_size);
 

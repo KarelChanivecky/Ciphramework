@@ -684,29 +684,22 @@ cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_
 
 // ------------------------------------------------------------------------
 
-#define CLOSED_FD (-2)
 
 int file_writer_write(cplib_file_writer_t *self, cplib_mem_chunk_t *data) {
     ssize_t ret;
 
-    if (self->fd == CLOSED_FD) {
-        self->fd = open((char *) self->file_path->mem, O_WRONLY | O_CREAT | O_APPEND);
-        if (self->fd == -1) {
-            LOG_MSG("Failed to open file %s due to error: %s\n", (char *) self->file_path->mem, strerror(errno));
-            self->fd = CLOSED_FD;
-            return CPLIB_ERR_OS;
-        }
+    if (self->fd == CPLIB_CLOSED_FD) {
+        return CPLIB_ERR_FILE;
     }
 
     ret = write(self->fd, data->mem, data->size);
     if (ret == -1) {
-        LOG_MSG("Failed to write to file %s due to error: %s\n", (char *) self->file_path->mem, strerror(errno));
+        LOG_MSG("Failed to write to file due to error: %s\n", strerror(errno));
         return CPLIB_ERR_OS;
     }
 
     if ((size_t) ret != data->size) {
-        LOG_MSG("Incomplete write to file %s. written: %zd < to write: %zu\n", (char *) self->file_path->mem, ret,
-                data->size);
+        LOG_MSG("Incomplete write to file. written: %zd < to write: %zu\n", ret, data->size);
         return CPLIB_ERR_OS;
     }
 
@@ -715,25 +708,32 @@ int file_writer_write(cplib_file_writer_t *self, cplib_mem_chunk_t *data) {
 
 int file_writer_close(cplib_file_writer_t *self) {
     int ret;
-    if (self->fd != CLOSED_FD) {
+    if (self->fd != CPLIB_CLOSED_FD) {
         return CPLIB_ERR_SUCCESS;
     }
 
     ret = close(self->fd);
-    self->fd = CLOSED_FD;
+    self->fd = CPLIB_CLOSED_FD;
 
     if (ret == -1) {
-        LOG_MSG("Failed to close file %s due to error: %s\n", (char *) self->file_path->mem, strerror(errno));
+        LOG_MSG("Failed to close file due to error: %s\n", strerror(errno));
         return CPLIB_ERR_OS;
     }
 
     return CPLIB_ERR_SUCCESS;
 }
 
+int file_writer_flush(cplib_file_writer_t *self) {
+    if (fsync(self->fd) == -1) {
+        LOG_MSG("Failed to fsync file due to error: %s\n", strerror(errno));
+        return CPLIB_ERR_OS;
+    }
+    return CPLIB_ERR_SUCCESS;
+}
+
 int file_writer_destroy(cplib_file_writer_t *self) {
     int ret;
 
-    cplib_destroyable_put(self->file_path);
     ret = self->close(self);
 
     if (ret == CPLIB_ERR_SUCCESS) {
@@ -744,13 +744,13 @@ int file_writer_destroy(cplib_file_writer_t *self) {
 }
 
 
-cplib_file_writer_t *cplib_file_writer_new(cplib_mem_chunk_t *file_path) {
+cplib_file_writer_t *cplib_file_writer_new(int fd) {
     cplib_file_writer_t *writer = (cplib_file_writer_t *)
             cplib_writer_base_new(sizeof(cplib_file_writer_t), (cplib_write_data_f) file_writer_write);
 
-    writer->fd = CLOSED_FD;
-    writer->file_path = file_path;
+    writer->fd = fd;
     writer->destroy = (cplib_independent_mutator_f) file_writer_destroy;
+    writer->close = (cplib_independent_mutator_f) file_writer_close;
     return writer;
 }
 
@@ -770,9 +770,9 @@ typedef struct file_block_iterator_context_t file_block_iterator_context_t;
 
 int destroy_file_block_iterator_context(file_block_iterator_context_t *ctx) {
     cplib_destroyable_put(ctx->file_path);
-    if (ctx->fd != CLOSED_FD) {
+    if (ctx->fd != CPLIB_CLOSED_FD) {
         close(ctx->fd);
-        ctx->fd = CLOSED_FD;
+        ctx->fd = CPLIB_CLOSED_FD;
     }
     ctx->got_eof = 0;
     return ctx->allocated_iterator->destroy(ctx->allocated_iterator);
@@ -818,7 +818,7 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
         ctx->allocated_iterator = NULL;
     }
 
-    if (ctx->fd == CLOSED_FD) {
+    if (ctx->fd == CPLIB_CLOSED_FD) {
         ctx->fd = open(ctx->file_path->mem, O_RDONLY);
         if (ctx->fd == -1) {
             LOG_DEBUG("Failed to open file %s due to error %s.\n", (char *) ctx->file_path->mem, strerror(errno));
@@ -827,8 +827,10 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
     }
 
     if (partial) {
-        memcpy(ctx->buffer->mem, partial->mem, partial->taken);
-        ctx->buffer->taken = partial->taken;
+        ctx->buffer->recycle(ctx->buffer, partial->mem, partial->taken);
+        cplib_destroyable_put(partial);
+        *block = NULL;
+        partial = NULL;
     }
 
     read_size = read(
@@ -851,9 +853,6 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
         return CPLIB_ERR_ITER_STOP;
     }
 
-    cplib_destroyable_put(partial);
-    *block = NULL;
-    partial = NULL;
 
     ctx->buffer->taken += read_size;
 
@@ -879,7 +878,7 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
     goto partial_block_remaining;
 }
 
-cplib_block_iterator_base_t *cplib_file_block_iterator_new(cplib_mem_chunk_t *file_path,
+cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
                                                            size_t iterated_size,
                                                            size_t buffer_size) {
     file_block_iterator_context_t *ctx;
@@ -892,20 +891,20 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(cplib_mem_chunk_t *fi
             (cplib_empty_f) cplib_file_block_iterator_is_empty);
 
     if (!file_iterator) {
-        LOG_DEBUG("Failed to create block iterator for file %s\n", (char *) file_path->mem);
+        LOG_DEBUG("Failed to create block iterator for file.\n");
         return NULL;
     }
 
     ctx = (file_block_iterator_context_t *) cplib_destroyable_new(sizeof(file_block_iterator_context_t));
     if (!ctx) {
-        LOG_DEBUG("Failed to create file block iterator context for file %s\n", (char *) file_path->mem);
+        LOG_DEBUG("Failed to create file block iterator context for file.\n");
         cplib_destroyable_put(file_iterator);
         return NULL;
     }
 
     buffer = cplib_allocate_mem_chunk(buffer_size);
     if (!buffer) {
-        LOG_DEBUG("Failed to allocate memory for read buffer for file %s\n", (char *) file_path->mem);
+        LOG_DEBUG("Failed to allocate memory for read buffer for file.\n");
         cplib_destroyable_put(ctx);
         cplib_destroyable_put(file_iterator);
         return NULL;
@@ -913,8 +912,7 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(cplib_mem_chunk_t *fi
 
     file_iterator->context = (cplib_destroyable_t *) ctx;
     ctx->allocated_iterator = NULL;
-    ctx->file_path = file_path;
-    ctx->fd = CLOSED_FD;
+    ctx->fd = fd;
     ctx->got_eof = 0;
     ctx->buffer = buffer;
     ctx->iterated_size = iterated_size;

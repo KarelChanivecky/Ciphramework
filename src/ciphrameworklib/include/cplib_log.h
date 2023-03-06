@@ -10,16 +10,16 @@
 #define LOG_MSG(...) fprintf(stderr, __VA_ARGS__), fflush(stderr)
 
 #ifdef CPLIB_VERBOSE
-    #define CPLIB_DEBUG
-    #define LOG_VERBOSE(...) LOG_MSG(__VA_ARGS__)
+#define CPLIB_DEBUG
+#define LOG_VERBOSE(...) LOG_MSG(__VA_ARGS__)
 #else
-    #define LOG_VERBOSE(...)
+#define LOG_VERBOSE(...)
 #endif
 
 #ifdef CPLIB_DEBUG
-    #define LOG_DEBUG(...) (LOG_MSG(__VA_ARGS__))
+#define LOG_DEBUG(...) (LOG_MSG(__VA_ARGS__))
 #else
-    #define LOG_DEBUG(...)
+#define LOG_DEBUG(...)
 #endif // CPLIB_DEBUG
 
 

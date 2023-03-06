@@ -21,7 +21,7 @@ struct cplib_destroyable_t {
 
 typedef struct cplib_destroyable_t cplib_destroyable_t;
 
-typedef int (*cplib_mem_chunk_recycle_f)(struct cplib_mem_chunk_t *self, void *data, size_t size, size_t taken);
+typedef int (*cplib_mem_chunk_recycle_f)(struct cplib_mem_chunk_t *self, void *data, size_t taken);
 
 #define CPLIB_MEM_DESTROY 1
 #define CPLIB_MEM_KEEP 0
@@ -58,8 +58,7 @@ typedef int (*cplib_mem_chunk_func)(void *self, cplib_mem_chunk_t *data);
  */
 typedef int (*cplib_next_item_f)(void *self, void **item);
 
-#define CPLIB_NULLIFY_IF_DESTROYED(destroyable) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) {(destroyable) = NULL;}
-#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) destroyable = NULL
+#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) (destroyable) = NULL
 
 void *cplib_malloc(size_t size);
 

@@ -9,15 +9,15 @@
 
 
 int xor_cipher_proc_function(struct cplib_cipher_base_t *base_self,
-               cplib_mem_chunk_t *data,
-               cplib_mem_chunk_t *key,
-               enum cplib_block_position position,
-               cplib_mem_chunk_t **processed_ptr) {
+                             cplib_mem_chunk_t *data,
+                             cplib_mem_chunk_t *key,
+                             enum cplib_block_position position,
+                             cplib_mem_chunk_t **processed_ptr) {
 
     int ret;
 
-    cplib_block_manipulator_base_t * block_manipulator;
-    cplib_mem_chunk_t * processed;
+    cplib_block_manipulator_base_t *block_manipulator;
+    cplib_mem_chunk_t *processed;
 
     block_manipulator = cplib_simple_block_manipulator_new();
     if (!*processed_ptr) {
@@ -38,7 +38,7 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *base_self,
     return block_manipulator->xor(block_manipulator, data, key, processed_ptr);
 }
 
-cplib_cipher_base_t * allocate_xor_cipher(void) {
+cplib_cipher_base_t *allocate_xor_cipher(void) {
     return cplib_cipher_new(xor_cipher_proc_function);
 }
 
