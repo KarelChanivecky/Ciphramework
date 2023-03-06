@@ -9,23 +9,17 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "mem_chunk.h"
+#include "cplib_mem.h"
 
 
 /**
- * TODO
- *  FRAMEWORK
- *  - block manipulation functions
- *  - block padding
- *  - block writer
- *  - block provider
- *  - argument parsing
  *
  * TODO
  *  IMPLEMENTATION
  *   - OTP test cipher
  *   - Key expansion
  *   - round function
+ *  - argument parsing
  *
  */
 
@@ -33,17 +27,25 @@
 
 enum cplib_base_error_codes {
     CPLIB_ERR_SUCCESS = 1,
+    CPLIB_ERR_ITER_STOP,  // shouldn't have tried to continue iterating
     CPLIB_ERR_DATA_SIZE,
     CPLIB_ERR_KEY_SIZE,
-    CPLIB_ERR_BITWISE_SIZE_MISMATCH,
+    CPLIB_ERR_SIZE_MISMATCH,
     CPLIB_ERR_CIPHER,
     CPLIB_ERR_MEM,
+    CPLIB_ERR_ARG,
+    CPLIB_ERR_OS
 };
 
 enum cplib_block_position {
     CPLIB_BLOCK_POS_START,
     CPLIB_BLOCK_POS_CENTER,
     CPLIB_BLOCK_POS_END
+};
+
+enum cplib_proc_type {
+    CPLIB_PROC_ENCRYPT,
+    CPLIB_PROC_DECRYPT
 };
 
 // ------------------------------------------------------------------------
@@ -84,13 +86,10 @@ struct cplib_cipher_factory_base_t;
 
 typedef cplib_cipher_base_t *(*cplib_cipher_base_allocator_f)(void);
 
-typedef cplib_cipher_base_t *(*cplib_cipher_from_f)(struct cplib_cipher_factory_base_t *self,
-                                                    cplib_cipher_base_t *previous_cipher);
 
 struct cplib_cipher_factory_base_t {
     cplib_destroyable_t;
     cplib_cipher_base_allocator_f allocate;
-    cplib_cipher_from_f from;
 };
 
 typedef struct cplib_cipher_factory_base_t cplib_cipher_factory_base_t;
@@ -106,11 +105,9 @@ int cplib_cipher_factory_base_destroy(cplib_cipher_factory_base_t *factory);
 
 struct cplib_cipher_provider_base_t;
 
-typedef int (*cplib_next_cipher)(void *self, cplib_cipher_base_t **cipher);
 
 struct cplib_cipher_provider_base_t {
     cplib_destroyable_t;
-
     cplib_next_item_f next;
 };
 
@@ -126,7 +123,7 @@ int cplib_cipher_provider_base_destroy(cplib_cipher_provider_base_t *provider);
 
 struct cplib_writer_base_t;
 
-typedef int (*cplib_write_data_f)(struct cplib_writer_base_t *self, void *target, void *data, size_t data_len);
+typedef int (*cplib_write_data_f)(struct cplib_writer_base_t *self, cplib_mem_chunk_t *data);
 
 struct cplib_writer_base_t {
     cplib_destroyable_t;
@@ -149,11 +146,13 @@ struct cplib_block_manipulator_base_t;
 
 typedef int (*cplib_block_split_f)(struct cplib_block_manipulator_base_t *self,
                                    cplib_mem_chunk_t *data,
-                                   size_t size,
-                                   cplib_mem_chunk_t **chunks);
+                                   size_t split_size,
+                                   cplib_mem_chunk_t ***chunks,
+                                   unsigned int *chunk_count);
 
 typedef int (*cplib_block_join_f)(struct cplib_block_manipulator_base_t *self,
-                                  cplib_mem_chunk_t **chunks, unsigned int chunk_c,
+                                  cplib_mem_chunk_t **chunks,
+                                  unsigned int chunk_c,
                                   cplib_mem_chunk_t **joined);
 
 typedef int (*cplib_block_xor_f)(struct cplib_block_manipulator_base_t *self,
@@ -185,12 +184,12 @@ int cplib_block_manipulator_base_destroy(cplib_block_manipulator_base_t *manipul
 
 typedef int (*cplib_empty_f)(void *self);
 
+
 struct cplib_block_iterator_base_t {
     cplib_destroyable_t;
-    cplib_mem_chunk_func initialize;
     cplib_next_item_f next;
     cplib_empty_f is_empty;
-    cplib_mem_chunk_t *data;
+    cplib_destroyable_t *context;
 };
 
 typedef struct cplib_block_iterator_base_t cplib_block_iterator_base_t;
@@ -202,30 +201,6 @@ cplib_block_iterator_base_t *cplib_block_iterator_base_new(size_t struct_size,
 cplib_block_iterator_base_t *cplib_block_iterator_new(cplib_next_item_f next, cplib_empty_f is_empty);
 
 int cplib_block_iterator_base_destroy(cplib_block_iterator_base_t *block_iterator);
-
-// ------------------------------------------------------------------------
-
-struct cplib_block_iterator_factory_base_t;
-
-typedef cplib_block_iterator_base_t *(*cplib_block_iterator_allocator_f)(void);
-
-typedef cplib_block_iterator_base_t *(*cplib_block_iterator_from_chunk_f)(
-        struct cplib_block_iterator_factory_base_t *self, cplib_mem_chunk_t *chunk);
-
-struct cplib_block_iterator_factory_base_t {
-    struct cplib_destroyable_t;
-    cplib_block_iterator_allocator_f allocate;
-    cplib_block_iterator_from_chunk_f from_chunk;
-};
-
-typedef struct cplib_block_iterator_factory_base_t cplib_block_iterator_factory_base_t;
-
-cplib_block_iterator_factory_base_t *
-cplib_block_iterator_factory_base_new(size_t struct_size, cplib_block_iterator_allocator_f allocator);
-
-cplib_block_iterator_factory_base_t *cplib_block_iterator_factory_new(cplib_block_iterator_allocator_f allocator);
-
-int cplib_block_iterator_factory_destroy(cplib_block_iterator_factory_base_t *block_iterator_factory);
 
 // ------------------------------------------------------------------------
 
@@ -328,6 +303,7 @@ struct cplib_block_padder_base_t;
  */
 typedef int (*cplib_block_pad_f)(struct cplib_block_padder_base_t *self,
                                  cplib_mem_chunk_t *block,
+                                 size_t key_len,
                                  cplib_mem_chunk_t **padded_block,
                                  cplib_mem_chunk_t **extra_block);
 
@@ -355,17 +331,16 @@ int cplib_block_padder_base_destroy(cplib_block_padder_base_t *padder);
 
 struct cplib_cipher_driver_t;
 
-typedef int (*cplib_cipher_driver_run_f)(struct cplib_cipher_driver_t *self, cplib_mem_chunk_t *data);
 
 struct cplib_cipher_driver_t {
-    cplib_cipher_driver_run_f run;
+    cplib_destroyable_t;
+    cplib_independent_mutator_f run;
     cplib_cipher_factory_base_t *cipher_factory;
     cplib_cipher_base_t *_cipher;
     cplib_mode_base_t *mode;
     cplib_writer_base_t *writer;
     cplib_key_provider_base_t *key_provider;
     cplib_block_iterator_base_t *block_iterator;
-    cplib_block_iterator_factory_base_t *block_iterator_factory;
     cplib_block_padder_base_t *block_padder;
     int block_position;
 };
@@ -375,5 +350,31 @@ typedef struct cplib_cipher_driver_t cplib_cipher_driver_t;
 cplib_cipher_driver_t *cplib_cipher_driver_new(void);
 
 int cplib_cipher_driver_base_destroy(cplib_cipher_driver_t *cipher_driver);
+
+// ------------------------------------------------------------------------
+
+#define CPLIB_BYTE_MASK_1000_0000 0b10000000
+#define CPLIB_BYTE_MASK_1100_0000 0b11000000
+#define CPLIB_BYTE_MASK_1110_0000 0b11100000
+#define CPLIB_BYTE_MASK_1111_0000 0b11110000
+#define CPLIB_BYTE_MASK_1111_1000 0b11111000
+#define CPLIB_BYTE_MASK_1111_1100 0b11111100
+#define CPLIB_BYTE_MASK_1111_1110 0b11111110
+#define CPLIB_BYTE_MASK_1111_1111 0b11111111
+#define CPLIB_BYTE_MASK_0111_1111 0b01111111
+#define CPLIB_BYTE_MASK_0011_1111 0b00111111
+#define CPLIB_BYTE_MASK_0001_1111 0b00011111
+#define CPLIB_BYTE_MASK_0000_1111 0b00001111
+#define CPLIB_BYTE_MASK_0000_0111 0b00000111
+#define CPLIB_BYTE_MASK_0000_0011 0b00000011
+#define CPLIB_BYTE_MASK_0000_0001 0b00000001
+
+#define CPLIB_BYTE_MASK_L CPLIB_BYTE_MASK_1111_0000
+#define CPLIB_BYTE_MASK_R CPLIB_BYTE_MASK_0000_0111
+
+typedef struct cplib_byte_mask_t {
+    uint8_t left;
+    uint8_t right;
+} cplib_byte_mask_t;
 
 #endif //SOURCES_CIPHRAMEWORKLIB_H

@@ -9,9 +9,6 @@
 
 #include <stdint.h>
 
-#include "ciphrameworklib.h"
-
-
 struct cplib_mem_chunk_t;
 
 
@@ -19,11 +16,23 @@ typedef int (*cplib_independent_mutator_f)(void *self);
 
 struct cplib_destroyable_t {
     cplib_independent_mutator_f destroy;
+    int ref_count;
 };
 
 typedef struct cplib_destroyable_t cplib_destroyable_t;
 
 typedef int (*cplib_mem_chunk_recycle_f)(struct cplib_mem_chunk_t *self, void *data, size_t size, size_t taken);
+
+#define CPLIB_MEM_DESTROY 1
+#define CPLIB_MEM_KEEP 0
+
+int cplib_destroyable_put(void *destroyable);
+
+int cplib_destroyable_hold(void *destroyable);
+
+cplib_destroyable_t *cplib_destroyable_new(size_t size);
+
+int cplib_destroyable_destroy(struct cplib_destroyable_t *destroyable);
 
 struct cplib_mem_chunk_t {
     cplib_destroyable_t;
@@ -37,8 +46,7 @@ typedef struct cplib_mem_chunk_t cplib_mem_chunk_t;
 
 cplib_mem_chunk_t *cplib_mem_chunk_new(void *data, size_t size);
 
-cplib_mem_chunk_t *cplib_allocate_mem_chunk_new(size_t size);
-
+cplib_mem_chunk_t *cplib_allocate_mem_chunk(size_t size);
 
 int cplib_destroy_chunk(cplib_mem_chunk_t *chunk);
 
@@ -50,11 +58,14 @@ typedef int (*cplib_mem_chunk_func)(void *self, cplib_mem_chunk_t *data);
  */
 typedef int (*cplib_next_item_f)(void *self, void **item);
 
-#define CPLIB_DESTROY_CHUNK(chunk) (chunk)->destroy((chunk)), (chunk) = NULL
-#define CPLIB_DESTROY_CHUNK_IF_IS_NOT(chunk, other)     \
-    if ((chunk) != (other))                             \
-        (CPLIB_DESTROY_CHUNK(chunk));                   \
-    else                                                \
-        (chunk) = NULL
+#define CPLIB_NULLIFY_IF_DESTROYED(destroyable) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) {(destroyable) = NULL;}
+#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) destroyable = NULL
+
+void *cplib_malloc(size_t size);
+
+void cplib_free(void *ptr);
+
+void cplib_hold(void *ptr);
+
 
 #endif //SOURCES_MEM_H
