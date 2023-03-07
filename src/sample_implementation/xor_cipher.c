@@ -23,19 +23,21 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *base_self,
     if (!*processed_ptr) {
         *processed_ptr = cplib_allocate_mem_chunk(key->taken);
         if (!*processed_ptr) {
-            LOG_MSG("Failed to allocate memory for processed data");
+            LOG_MSG("Failed to allocate memory for processed data\n");
             return CPLIB_ERR_MEM;
         }
     }
 
     processed = *processed_ptr;
 
-    if (processed->size < key->size) {
-        LOG_MSG("Passed processed buffer is smaller than needed. given %zu < needed %zu", processed->size, key->taken);
+    if (processed->size < key->taken) {
+        LOG_MSG("Passed processed buffer is smaller than needed. given %zu < needed %zu\n", processed->size, key->taken);
         return CPLIB_ERR_SIZE_MISMATCH;
     }
 
-    return block_manipulator->xor(block_manipulator, data, key, processed_ptr);
+    ret = block_manipulator->xor(block_manipulator, data, key, processed_ptr);
+    cplib_destroyable_put(block_manipulator);
+    return ret;
 }
 
 cplib_cipher_base_t *allocate_xor_cipher(void) {

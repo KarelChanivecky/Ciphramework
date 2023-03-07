@@ -6,6 +6,7 @@
 #include "cplib_log.h"
 
 int cplib_cipher_base_destroy(cplib_cipher_base_t *cipher) {
+    LOG_VERBOSE("Destroying cplib_cipher_base_t %p\n", (void *)cipher);
     cipher->process = NULL;
     cipher->destroy = NULL;
     cipher->initialize = NULL;
@@ -56,6 +57,7 @@ cplib_cipher_base_t *cplib_cipher_from_other(cplib_cipher_factory_base_t *self, 
 }
 
 int cplib_cipher_factory_base_destroy(cplib_cipher_factory_base_t *factory) {
+    LOG_VERBOSE("Destroying cplib_cipher_factory_base_t %p\n", (void *)factory);
     factory->destroy = NULL;
     cplib_free(factory);
     return CPLIB_ERR_SUCCESS;
@@ -83,6 +85,8 @@ cplib_cipher_factory_base_t *cplib_cipher_factory_new(cplib_cipher_base_allocato
 // ------------------------------------------------------------------------
 
 int cplib_writer_base_destroy(cplib_writer_base_t *writer) {
+    LOG_VERBOSE("Destroying cplib_writer_base_t %p\n", (void *)writer);
+
     writer->write = NULL;
     writer->destroy = NULL;
     cplib_free(writer);
@@ -108,6 +112,8 @@ cplib_writer_base_t *cplib_writer_new(cplib_write_data_f write) {
 // ------------------------------------------------------------------------
 
 int cplib_block_manipulator_base_destroy(cplib_block_manipulator_base_t *manipulator) {
+    LOG_VERBOSE("Destroying cplib_block_manipulator_base_t %p\n", (void *)manipulator);
+
     manipulator->split = NULL;
     manipulator->join = NULL;
     manipulator->destroy = NULL;
@@ -142,6 +148,8 @@ cplib_block_manipulator_new(cplib_block_split_f split, cplib_block_join_f join, 
 // ------------------------------------------------------------------------
 
 int cplib_block_iterator_base_destroy(cplib_block_iterator_base_t *block_iterator) {
+    LOG_VERBOSE("Destroying cplib_block_iterator_base_t %p\n", (void *)block_iterator);
+
     block_iterator->next = NULL;
     block_iterator->is_empty = NULL;
     block_iterator->destroy = NULL;
@@ -184,6 +192,8 @@ cplib_block_iterator_new(cplib_next_item_f next, cplib_empty_f is_empty) {
 
 
 int cplib_block_padder_base_destroy(cplib_block_padder_base_t *padder) {
+    LOG_VERBOSE("Destroying cplib_block_padder_base_t %p\n", (void *)padder);
+
     padder->pad = NULL;
     padder->unpad = NULL;
     padder->destroy = NULL;
@@ -213,6 +223,8 @@ cplib_block_padder_base_t *cplib_block_padder_new(cplib_block_pad_f pad, cplib_b
 // ------------------------------------------------------------------------
 
 int cplib_key_provider_base_destroy(cplib_key_provider_base_t *key_provider) {
+    LOG_VERBOSE("Destroying cplib_key_provider_base_t %p\n", (void *)key_provider);
+
     key_provider->next = NULL;
     key_provider->destroy = NULL;
     key_provider->initialize = NULL;
@@ -258,6 +270,8 @@ cplib_key_provider_base_t *cplib_key_provider_from_chunk(cplib_key_provider_fact
 }
 
 int cplib_key_provider_factory_base_destroy(cplib_key_provider_factory_base_t *key_provider_factory) {
+    LOG_VERBOSE("Destroying cplib_key_provider_factory_base_t %p\n", (void *)key_provider_factory);
+
     key_provider_factory->from = NULL;
     key_provider_factory->destroy = NULL;
     cplib_free(key_provider_factory);
@@ -288,6 +302,8 @@ cplib_key_provider_factory_base_t *cplib_key_provider_factory_new(cplib_key_prov
 
 
 int cplib_mode_base_destroy(cplib_mode_base_t *mode) {
+    LOG_VERBOSE("Destroying cplib_mode_base_t %p\n", (void *)mode);
+
     mode->post_cipher_transform = NULL;
     mode->pre_cipher_transform = NULL;
     cplib_free(mode);
@@ -316,6 +332,8 @@ cplib_mode_new(cplib_mode_pre_transform_f pre_transform, cplib_mode_post_transfo
 // ------------------------------------------------------------------------
 
 int cplib_cipher_provider_base_destroy(cplib_cipher_provider_base_t *provider) {
+    LOG_VERBOSE("Destroying cplib_cipher_provider_base_t %p\n", (void *)provider);
+
     provider->destroy = NULL;
     provider->next = NULL;
     cplib_free(provider);

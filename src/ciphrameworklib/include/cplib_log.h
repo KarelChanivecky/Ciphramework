@@ -9,6 +9,14 @@
 
 #define LOG_MSG(...) fprintf(stderr, __VA_ARGS__), fflush(stderr)
 
+#ifdef CPLIB_LOG_MEM
+    #define  CPLIB_VERBOSE
+    #define  CPLIB_DEBUG
+    #define LOG_MEM(...) fprintf(stderr, __VA_ARGS__), fflush(stderr)
+#else
+    #define LOG_MEM(...)
+#endif
+
 #ifdef CPLIB_VERBOSE
 #define CPLIB_DEBUG
 #define LOG_VERBOSE(...) LOG_MSG(__VA_ARGS__)

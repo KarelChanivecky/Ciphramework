@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+
 #include "cplib_utils.h"
 #include "cplib_log.h"
 
@@ -13,11 +14,13 @@
 int cplib_keyed_key_provider_default_next(void *g_self, void **key) {
     cplib_keyed_key_provider_t *self = (cplib_keyed_key_provider_t *) g_self;
     *key = self->key;
-    cplib_destroyable_hold(key);
+    cplib_destroyable_hold(*key);
     return CPLIB_ERR_SUCCESS;
 }
 
 int cplib_keyed_key_provider_destroy(cplib_keyed_key_provider_t *self) {
+    LOG_VERBOSE("Destroying cplib_keyed_key_provider_t %p\n", (void *) self);
+
     cplib_destroyable_put(self->key);
     self->key = NULL;
 
@@ -108,6 +111,8 @@ int round_cipher_process(
 }
 
 int cplib_round_cipher_base_destroy(cplib_round_cipher_base_t *self) {
+    LOG_VERBOSE("Destroying cplib_round_cipher_base_t %p\n", (void *) self);
+
     if (self->key_provider) {
         self->key_provider->destroy(self->key_provider);
         self->key_provider = NULL;
@@ -342,6 +347,8 @@ int provide_next_cipher(cplib_same_cipher_provider_t *self, cplib_cipher_base_t 
 }
 
 int cplib_same_cipher_provider_destroy(cplib_same_cipher_provider_t *self) {
+    LOG_VERBOSE("Destroying cplib_same_cipher_provider_t %p\n", (void *) self);
+
     cplib_destroyable_put(self->cipher);
     self->cipher = NULL;
     self->provide_count = 0;
@@ -364,20 +371,21 @@ cplib_same_cipher_provider_t *cplib_same_cipher_provider_new(cplib_cipher_base_t
 
 // ------------------------------------------------------------------------
 
-int cplib_block_split(cplib_block_manipulator_base_t *block_manipulator,
+int cplib_block_split(cplib_block_manipulator_base_t *self,
                       cplib_mem_chunk_t *block,
                       size_t split_size,
                       cplib_mem_chunk_t ***chunks_ptr,
                       unsigned int *chunk_count_ptr) {
     unsigned int chunk_count;
     unsigned int chunk_index;
+    size_t chunk_mem_index;
     uint8_t *from_block_data;
     uint8_t *to_block_data;
     cplib_mem_chunk_t **chunks;
     cplib_mem_chunk_t *chunk;
 
     from_block_data = block->mem;
-    chunk_count = block->taken / split_size;
+    chunk_count = block->taken / split_size + ((block->taken % split_size) != 0);
     if (!*chunks_ptr) {
         *chunks_ptr = cplib_malloc(sizeof(cplib_mem_chunk_t *) * chunk_count);
         *chunk_count_ptr = chunk_count;
@@ -407,7 +415,8 @@ int cplib_block_split(cplib_block_manipulator_base_t *block_manipulator,
         chunk_index = (int) i / split_size;
         chunk = chunks[chunk_index];
         to_block_data = chunk->mem;
-        to_block_data[i % split_size] = from_block_data[i];
+        chunk_mem_index = i % split_size;
+        to_block_data[chunk_mem_index] = from_block_data[i];
         chunk->taken++;
     }
 
@@ -484,8 +493,9 @@ int cplib_block_xor(struct cplib_block_manipulator_base_t *self,
     }
 
     result = *result_ptr;
-    if (result->taken != one->taken) {
-        LOG_DEBUG("Passed result block size does not match to operands. %zu!= %zu\n", result->taken, one->taken);
+    if (result->size < one->taken) {
+        LOG_DEBUG("Passed result block size is is not large enough. Given: %zu != Need: %zu\n", result->size,
+                  one->taken);
         return CPLIB_ERR_SIZE_MISMATCH;
     }
 
@@ -519,8 +529,6 @@ int pkcs5_block_pad(cplib_block_padder_base_t *self,
     cplib_mem_chunk_t *to_pad;
     size_t pad_len;
 
-    LOG_VERBOSE("Padding block of %zuB\n ", data->taken);
-
     if (key_len > UINT8_MAX) {
         LOG_MSG("This PKCS#5 padding implementation only supports keys up to %ud bytes long.\n ", UINT8_MAX);
     }
@@ -543,12 +551,12 @@ int pkcs5_block_pad(cplib_block_padder_base_t *self,
     pad_len = key_len - data->taken;
 
     if (pad_len) {
-        LOG_VERBOSE("Padding block because : %zu\n", data->taken);
+        LOG_DEBUG("Padding block with pad length of %zu because: %zu < %zu\n", pad_len, data->taken, key_len);
         memcpy(padded->mem, data->mem, data->taken);
         padded->taken = data->taken;
         to_pad = padded;
     } else {
-        LOG_VERBOSE("Padding extra block because pad_len= %zu\n", pad_len);
+        LOG_DEBUG("Padding extra block because block_size = key_size\n");
 
         if (!*extra_ptr) {
             *extra_ptr = cplib_allocate_mem_chunk(key_len);
@@ -564,8 +572,9 @@ int pkcs5_block_pad(cplib_block_padder_base_t *self,
             LOG_DEBUG("Passed extra block is smaller than needed: got %zu!= need %zu\n", extra->size, key_len);
             return CPLIB_ERR_SIZE_MISMATCH;
         }
-
+        padded->recycle(padded, data->mem, data->taken);
         to_pad = extra;
+        pad_len = key_len;
     }
 
     memset((uint8_t *) to_pad->mem + to_pad->taken, (uint8_t) pad_len, pad_len);
@@ -599,7 +608,7 @@ int pkcs5_block_unpad(cplib_block_padder_base_t *self, cplib_mem_chunk_t *data, 
         return CPLIB_ERR_SIZE_MISMATCH;
     }
 
-    LOG_VERBOSE("Unpadded block of length: %zu\n", unpadded_block_len);
+    LOG_DEBUG("Unpadded block of length: %zu\n", unpadded_block_len);
     return CPLIB_ERR_SUCCESS;
 }
 
@@ -623,8 +632,13 @@ struct allocated_block_iterator_context_t {
 typedef struct allocated_block_iterator_context_t allocated_block_iterator_context_t;
 
 int destroy_allocated_block_iterator_context(allocated_block_iterator_context_t *ctx) {
+    LOG_VERBOSE("Destroying allocated_block_iterator_context_t %p\n", (void *) ctx);
+
+    cplib_mem_chunk_t *chunk;
+
     for (unsigned int i = 0; i < ctx->chunk_count; i++) {
-        cplib_destroyable_put(ctx->chunks[i]);
+        chunk = ctx->chunks[i];
+        cplib_destroyable_put(chunk);
     }
     cplib_free(ctx->chunks);
     cplib_free(ctx);
@@ -633,13 +647,19 @@ int destroy_allocated_block_iterator_context(allocated_block_iterator_context_t 
 
 
 int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_chunk_t **next_ptr) {
-    allocated_block_iterator_context_t *ctx = (allocated_block_iterator_context_t *) self;
+    allocated_block_iterator_context_t *ctx;
+    cplib_mem_chunk_t *next;
+
+    ctx = (allocated_block_iterator_context_t *) self->context;
 
     if (self->is_empty(self)) {
         return CPLIB_ERR_ITER_STOP;
     }
 
-    *next_ptr = ctx->chunks[ctx->next_chunk];
+    next = ctx->chunks[ctx->next_chunk];
+    *next_ptr = next;
+    cplib_destroyable_hold(next);
+
     ctx->next_chunk++;
     return CPLIB_ERR_SUCCESS;
 }
@@ -655,16 +675,6 @@ cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_
     cplib_block_iterator_base_t *block_iterator;
     allocated_block_iterator_context_t *ctx;
 
-    block_iterator = cplib_block_iterator_new(
-            (cplib_next_item_f) block_allocated_iterator_next,
-            (cplib_empty_f) block_allocated_iterator_is_empty);
-
-    if (!block_iterator) {
-        LOG_DEBUG("Failed to allocate block iterator\n");
-        return NULL;
-    }
-
-    block_iterator->destroy = (cplib_independent_mutator_f) destroy_allocated_block_iterator_context;
     ctx = (allocated_block_iterator_context_t *) cplib_destroyable_new(
             sizeof(struct allocated_block_iterator_context_t));
     if (!ctx) {
@@ -679,6 +689,19 @@ cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_
     }
 
     ctx->next_chunk = 0;
+
+
+    block_iterator = cplib_block_iterator_new(
+            (cplib_next_item_f) block_allocated_iterator_next,
+            (cplib_empty_f) block_allocated_iterator_is_empty);
+
+    if (!block_iterator) {
+        LOG_DEBUG("Failed to allocate block iterator\n");
+        cplib_destroyable_put(ctx);
+        return NULL;
+    }
+    block_iterator->context = (cplib_destroyable_t *) ctx;
+
     return block_iterator;
 }
 
@@ -732,14 +755,9 @@ int file_writer_flush(cplib_file_writer_t *self) {
 }
 
 int file_writer_destroy(cplib_file_writer_t *self) {
-    int ret;
+    LOG_VERBOSE("Destroying cplib_file_writer_t %p\n", (void *) self);
 
-    ret = self->close(self);
-
-    if (ret == CPLIB_ERR_SUCCESS) {
-        return ret;
-    }
-
+    self->close(self);
     return cplib_writer_base_destroy((cplib_writer_base_t *) self);
 }
 
@@ -769,6 +787,8 @@ struct file_block_iterator_context_t {
 typedef struct file_block_iterator_context_t file_block_iterator_context_t;
 
 int destroy_file_block_iterator_context(file_block_iterator_context_t *ctx) {
+    LOG_VERBOSE("Destroying file_block_iterator_context_t %p\n", (void *) ctx);
+
     cplib_destroyable_put(ctx->file_path);
     if (ctx->fd != CPLIB_CLOSED_FD) {
         close(ctx->fd);

@@ -25,6 +25,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     cplib_block_padder_base_t *block_padder;
     cplib_mode_base_t *mode;
     cplib_writer_base_t *writer;
+    size_t cur_block_size;
 
     block_iterator = self->block_iterator;
     key_provider = self->key_provider;
@@ -49,6 +50,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
             goto cleanup;
         }
+        cur_block_size = block->taken;
 
         do {
             if (extra) {
@@ -56,30 +58,33 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
                 // extra won't be anything but NULL until the last block and if data % key length == 0
                 // swap extra into block. We are done, so it shouldn't matter if the chunk were to be smaller
-                cplib_destroyable_put(block);
                 block = extra;
-                extra = NULL;
             }
 
 
             empty = block_iterator->is_empty(block_iterator);
-
-            if (block_padder && empty) {
-                ret = block_padder->pad(block_padder, block, key->taken, &padded, &extra);
-                if (ret != CPLIB_ERR_SUCCESS) {
-                    LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
-                    goto cleanup;
-                }
-            } else {
-                padded = block;
-                cplib_destroyable_hold(block);
-            }
 
             ret = key_provider->next(key_provider, (void **) &key);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Failed to get key. ret=%d\n", ret);
                 goto cleanup;
             }
+
+            if (block_padder && block_padder->pad && empty && !extra) {
+
+                ret = block_padder->pad(block_padder, block, key->taken, &padded, &extra);
+                if (ret != CPLIB_ERR_SUCCESS) {
+                    LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
+                    goto cleanup;
+                }
+            } else {
+                if (extra) {
+                    extra = NULL;
+                }
+                padded = block;
+                cplib_destroyable_hold(block);
+            }
+
 
             if (!mode) {
                 cplib_destroyable_hold(padded);
@@ -92,6 +97,9 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 }
             }
 
+            cplib_destroyable_put(padded);
+            padded = NULL;
+
             ret = cipher->process(cipher, pre_modded, key, self->block_position, &processed);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Cipher process failed. ret=%d\n", ret);
@@ -102,14 +110,22 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 post_modded = processed;
                 cplib_destroyable_hold(processed);
             } else {
-                ret = mode->post_cipher_transform(mode, processed, unpadded, key, self->block_position, &post_modded);
+                ret = mode->post_cipher_transform(mode, processed, block, key, self->block_position, &post_modded);
                 if (ret != CPLIB_ERR_SUCCESS) {
                     LOG_MSG("ERROR: Failed to apply post-cipher mode transform. ret=%d\n", ret);
                     goto cleanup;
                 }
             }
 
-            if (block_padder && empty) {
+
+            cplib_destroyable_put(block);
+            block = NULL;
+            cplib_destroyable_put(pre_modded);
+            pre_modded = NULL;
+            cplib_destroyable_put(key);
+            key = NULL;
+
+            if (block_padder && block_padder->unpad && empty) {
                 ret = block_padder->unpad(block_padder, block, &unpadded);
                 if (ret != CPLIB_ERR_SUCCESS) {
                     LOG_MSG("ERROR: Failed to unpad block. ret=%d\n", ret);
@@ -120,13 +136,19 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 cplib_destroyable_hold(post_modded);
             }
 
+            cplib_destroyable_put(post_modded);
+            post_modded = NULL;
+
             ret = writer->write(writer, unpadded);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Failed to write. ret=%d\n", ret);
                 goto cleanup;
             }
 
-            LOG_DEBUG("Cipher driver finished another chunk of split_size: %zu.\n", block->taken);
+            LOG_DEBUG("Cipher driver finished a chunk of size: %zu.\n", cur_block_size);
+
+            cplib_destroyable_put(unpadded);
+            unpadded = NULL;
         } while (extra); // if we have an extra block we need to process that before moving on
 
     }
@@ -142,9 +164,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     CPLIB_PUT_IF_EXISTS(processed);
     CPLIB_PUT_IF_EXISTS(post_modded);
     CPLIB_PUT_IF_EXISTS(unpadded);
-    CPLIB_PUT_IF_EXISTS(cipher);
     CPLIB_PUT_IF_EXISTS(key);
-    CPLIB_PUT_IF_EXISTS(block_iterator);
     writer->close(writer);
 
     return ret;
@@ -152,25 +172,18 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
 
 int cplib_cipher_driver_base_destroy(cplib_cipher_driver_t *cipher_driver) {
-    cipher_driver->writer->destroy(cipher_driver->writer);
-    cipher_driver->key_provider->destroy(cipher_driver->key_provider);
-    cipher_driver->cipher_factory->destroy(cipher_driver->cipher_factory);
-    cipher_driver->_cipher->destroy(cipher_driver->_cipher);
-    cipher_driver->block_iterator->destroy(cipher_driver->block_iterator);
-    cipher_driver->mode->destroy(cipher_driver->mode);
-    cipher_driver->block_padder->destroy(cipher_driver->block_padder);
+    LOG_VERBOSE("Destroying cplib_cipher_driver_t %p\n", (void *) cipher_driver);
 
-    cipher_driver->writer = NULL;
-    cipher_driver->key_provider = NULL;
-    cipher_driver->cipher_factory = NULL;
-    cipher_driver->_cipher = NULL;
-    cipher_driver->block_padder = NULL;
-    cipher_driver->block_iterator = NULL;
-    cipher_driver->mode = NULL;
-    cipher_driver->run = NULL;
+    CPLIB_PUT_IF_EXISTS(cipher_driver->writer);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->key_provider);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->cipher_factory);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->_cipher);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->block_iterator);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->mode);
+    CPLIB_PUT_IF_EXISTS(cipher_driver->block_padder);
 
     cplib_free(cipher_driver);
-    return 0;
+    return CPLIB_ERR_SUCCESS;
 }
 
 
@@ -182,7 +195,6 @@ cplib_cipher_driver_t *cplib_cipher_driver_new(void) {
         return NULL;
     }
 
-    memset(cipher_driver, 0, sizeof(cplib_cipher_driver_t));
     cipher_driver->block_position = CPLIB_BLOCK_POS_START;
     cipher_driver->destroy = (cplib_independent_mutator_f) cplib_cipher_driver_base_destroy;
     cipher_driver->run = (cplib_independent_mutator_f) cipher_driver_run;

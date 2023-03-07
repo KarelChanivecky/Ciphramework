@@ -46,6 +46,8 @@ typedef struct cplib_mem_chunk_t cplib_mem_chunk_t;
 
 cplib_mem_chunk_t *cplib_mem_chunk_new(void *data, size_t size);
 
+cplib_mem_chunk_t *cplib_mem_chunk_str_new(char *string);
+
 cplib_mem_chunk_t *cplib_allocate_mem_chunk(size_t size);
 
 int cplib_destroy_chunk(cplib_mem_chunk_t *chunk);
@@ -58,7 +60,8 @@ typedef int (*cplib_mem_chunk_func)(void *self, cplib_mem_chunk_t *data);
  */
 typedef int (*cplib_next_item_f)(void *self, void **item);
 
-#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) if (cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY) (destroyable) = NULL
+#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY, (destroyable) = NULL
+#define CPLIB_HOLD_IF_EXISTS(destroyable) if ((destroyable)) cplib_destroyable_hold((destroyable))
 
 void *cplib_malloc(size_t size);
 
