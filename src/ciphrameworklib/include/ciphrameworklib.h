@@ -16,18 +16,15 @@
  *
  * TODO
  *  IMPLEMENTATION
- *   - OTP test cipher
  *   - Key expansion
  *   - round function
- *  - argument parsing
- *
  */
 
 // ------------------------------------------------------------------------
 
 enum cplib_base_error_codes {
     CPLIB_ERR_SUCCESS = 1,
-    CPLIB_ERR_ITER_STOP,  // shouldn't have tried to continue iterating
+    CPLIB_ERR_ITER_OVERFLOW,  // shouldn't have tried to continue iterating
     CPLIB_ERR_DATA_SIZE,
     CPLIB_ERR_KEY_SIZE,
     CPLIB_ERR_SIZE_MISMATCH,
@@ -36,6 +33,7 @@ enum cplib_base_error_codes {
     CPLIB_ERR_ARG,
     CPLIB_ERR_OS,
     CPLIB_ERR_FILE,
+    CPLIB_ERR_EOF
 };
 
 enum cplib_block_position {

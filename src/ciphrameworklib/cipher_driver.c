@@ -97,8 +97,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 }
             }
 
-            cplib_destroyable_put(padded);
-            padded = NULL;
+            CPLIB_PUT_IF_EXISTS(padded);
 
             ret = cipher->process(cipher, pre_modded, key, self->block_position, &processed);
             if (ret != CPLIB_ERR_SUCCESS) {
@@ -118,15 +117,12 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             }
 
 
-            cplib_destroyable_put(block);
-            block = NULL;
-            cplib_destroyable_put(pre_modded);
-            pre_modded = NULL;
-            cplib_destroyable_put(key);
-            key = NULL;
+
+            CPLIB_PUT_IF_EXISTS(pre_modded);
+            CPLIB_PUT_IF_EXISTS(key);
 
             if (block_padder && block_padder->unpad && empty) {
-                ret = block_padder->unpad(block_padder, block, &unpadded);
+                ret = block_padder->unpad(block_padder, post_modded, &unpadded);
                 if (ret != CPLIB_ERR_SUCCESS) {
                     LOG_MSG("ERROR: Failed to unpad block. ret=%d\n", ret);
                     goto cleanup;
@@ -136,8 +132,8 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 cplib_destroyable_hold(post_modded);
             }
 
-            cplib_destroyable_put(post_modded);
-            post_modded = NULL;
+            CPLIB_PUT_IF_EXISTS(block);
+            CPLIB_PUT_IF_EXISTS(post_modded);
 
             ret = writer->write(writer, unpadded);
             if (ret != CPLIB_ERR_SUCCESS) {
@@ -147,8 +143,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
             LOG_DEBUG("Cipher driver finished a chunk of size: %zu.\n", cur_block_size);
 
-            cplib_destroyable_put(unpadded);
-            unpadded = NULL;
+            CPLIB_PUT_IF_EXISTS(unpadded);
         } while (extra); // if we have an extra block we need to process that before moving on
 
     }
