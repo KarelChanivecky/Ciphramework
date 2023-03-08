@@ -4,8 +4,6 @@ set -o pipefail
 
 EXE=./build/kcrypt
 
-./build_exe.sh || echo "build failed" || exit 1
-
 mkdir -p encrypted
 mkdir -p decrypted
 
@@ -55,8 +53,8 @@ for key_path in "${key_paths[@]}"; do
     then
       echo "TEST PASSED: $plaintext_sha == $decrypted_sha"
     else
+      echo "TEST FAILED: Decrypted != plaintext: $plaintext_sha == $decrypted_sha"
       read
-      echo "TEST FAILED: Decrypted != plaintext"
       ((failed_tests++))
     fi
   done

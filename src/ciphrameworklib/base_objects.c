@@ -39,25 +39,9 @@ cplib_cipher_base_t *cplib_cipher_new(cplib_process_f process) {
 
 // ------------------------------------------------------------------------
 
-cplib_cipher_base_t *cplib_cipher_from_other(cplib_cipher_factory_base_t *self, cplib_cipher_base_t *other) {
-    int ret;
-    cplib_cipher_base_t *cipher = self->allocate();
-    if (!cipher) {
-        return NULL;
-    }
-
-    ret = cipher->initialize(cipher, other);
-    if (ret != CPLIB_ERR_SUCCESS) {
-        LOG_DEBUG("Failed to initialize _cipher. Code: %d\n", ret);
-        cipher->destroy(cipher);
-        return NULL;
-    }
-
-    return cipher;
-}
-
 int cplib_cipher_factory_base_destroy(cplib_cipher_factory_base_t *factory) {
     LOG_VERBOSE("Destroying cplib_cipher_factory_base_t %p\n", (void *)factory);
+    CPLIB_PUT_IF_EXISTS(factory->context);
     factory->destroy = NULL;
     cplib_free(factory);
     return CPLIB_ERR_SUCCESS;
@@ -73,7 +57,7 @@ cplib_cipher_factory_base_new(size_t struct_size, cplib_cipher_base_allocator_f 
 
     cipher_factory->allocate = allocator;
     cipher_factory->destroy = (cplib_independent_mutator_f) cplib_cipher_factory_base_destroy;
-
+    cipher_factory->context = NULL;
     return cipher_factory;
 }
 

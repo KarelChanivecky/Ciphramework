@@ -13,6 +13,7 @@
 int cplib_keyed_key_provider_default_next(void *g_self, void **key) {
     cplib_keyed_key_provider_t *self = (cplib_keyed_key_provider_t *) g_self;
     *key = self->key;
+    // add a hold because we did not allocate the memory
     cplib_destroyable_hold(*key);
     return CPLIB_ERR_SUCCESS;
 }
@@ -20,7 +21,7 @@ int cplib_keyed_key_provider_default_next(void *g_self, void **key) {
 int cplib_keyed_key_provider_destroy(cplib_keyed_key_provider_t *self) {
     LOG_VERBOSE("Destroying cplib_keyed_key_provider_t %p\n", (void *) self);
 
-    cplib_destroyable_put(self->key);
+    CPLIB_PUT_IF_EXISTS(self->key);
     self->key = NULL;
 
     return cplib_key_provider_base_destroy((cplib_key_provider_base_t *) self);
@@ -91,7 +92,7 @@ int round_cipher_process(
             return ret;
         }
 
-        ret = cipher->process(cipher, data, key, position, processed);
+        ret = cipher->process((cplib_destroyable_t *)cipher, data, key, position, processed);
         if (ret) {
             return ret;
         }
@@ -131,10 +132,11 @@ int cplib_round_cipher_base_destroy(cplib_round_cipher_base_t *self) {
 }
 
 cplib_round_cipher_base_t *
-cplib_round_cipher_base_new(size_t struct_size, cplib_cipher_provider_base_t *cipher_provider,
+cplib_round_cipher_base_new(size_t struct_size,
+                            cplib_cipher_provider_base_t *cipher_provider,
                             cplib_key_provider_factory_base_t *key_provider_factory) {
     cplib_round_cipher_base_t *round_cipher =
-            (cplib_round_cipher_base_t *) cplib_cipher_base_new(struct_size, round_cipher_process);
+            (cplib_round_cipher_base_t *) cplib_cipher_base_new(struct_size, (cplib_process_f) round_cipher_process);
     if (!round_cipher) {
         LOG_DEBUG("Cannot allocate round_cipher. Out of memory\n");
         return NULL;
@@ -179,13 +181,23 @@ int cplib_feistel_cipher_encrypt(
         cplib_mem_chunk_t **ciphertext_ptr) {
 
     int ret;
-    cplib_mem_chunk_t *plaintext_halves[2] = {0}; // allocated by split
+    cplib_mem_chunk_t **plaintext_halves = NULL; // chunks themselves are allocated by split
     cplib_mem_chunk_t *ciphertext_halves[2] = {0};
     cplib_mem_chunk_t *round_function_result;
-    ciphertext_halves[0] = cplib_allocate_mem_chunk(plaintext->size / 2);
-    ciphertext_halves[1] = cplib_allocate_mem_chunk(plaintext->size / 2);
-    round_function_result = cplib_allocate_mem_chunk(plaintext->size / 2);
-    unsigned int unused;
+
+
+    plaintext_halves = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 2);
+    if (!plaintext_halves) {
+        LOG_DEBUG("Cannot allocate plaintext_halves. Out of memory\n");
+        return CPLIB_ERR_MEM;
+    }
+
+    plaintext_halves[0] = NULL;
+    plaintext_halves[1] = NULL;
+    ciphertext_halves[0] = cplib_allocate_mem_chunk(plaintext->taken / 2);
+    ciphertext_halves[1] = cplib_allocate_mem_chunk(plaintext->taken / 2);
+    round_function_result = cplib_allocate_mem_chunk(plaintext->taken / 2);
+    unsigned int unused = 2;
 
     if (!ciphertext_halves[0] || !ciphertext_halves[1] || !round_function_result) {
         LOG_DEBUG("Failed to allocate memory for encryption. Out of memory\n");
@@ -193,7 +205,7 @@ int cplib_feistel_cipher_encrypt(
         goto cleanup;
     }
 
-    ret = self->block_manipulator->split(self->block_manipulator, plaintext, plaintext->size / 2,
+    ret = self->block_manipulator->split(self->block_manipulator, plaintext, plaintext->taken / 2,
                                          (cplib_mem_chunk_t ***) &plaintext_halves,
                                          &unused);
     if (ret != CPLIB_ERR_SUCCESS) {
@@ -201,9 +213,9 @@ int cplib_feistel_cipher_encrypt(
         goto cleanup;
     }
 
-    ciphertext_halves[0] = plaintext_halves[1];
+    ciphertext_halves[0]->recycle(ciphertext_halves[0], plaintext_halves[1]->mem, plaintext_halves[1]->taken);
 
-    ret = self->round_function(self->round_function_self, plaintext_halves[1], &round_function_result, key, position);
+    ret = self->round_function(self->round_function_self, plaintext_halves[1], key, position, &round_function_result);
 
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Round function failed. ret=%d\n", ret);
@@ -227,7 +239,8 @@ int cplib_feistel_cipher_encrypt(
         CPLIB_PUT_IF_EXISTS(ciphertext_halves[i]);
     }
     CPLIB_PUT_IF_EXISTS(round_function_result);
-
+    cplib_free(plaintext_halves);
+    plaintext_halves = NULL;
     return ret;
 }
 
@@ -239,16 +252,26 @@ int cplib_feistel_cipher_decrypt(
         cplib_mem_chunk_t **plaintext_ptr) {
 
     int ret;
-    unsigned int unused;
-    cplib_mem_chunk_t *ciphertext_halves[2] = {0}; // allocated by split
+    unsigned int unused_var = 2;
+    cplib_mem_chunk_t **ciphertext_halves = NULL; // allocated by split
     cplib_mem_chunk_t *plaintext_halves[2] = {0};
     cplib_mem_chunk_t *round_function_result;
-    plaintext_halves[0] = cplib_allocate_mem_chunk(ciphertext->size / 2);
-    plaintext_halves[1] = cplib_allocate_mem_chunk(ciphertext->size / 2);
-    round_function_result = cplib_allocate_mem_chunk(ciphertext->size / 2);
 
-    if (!ciphertext_halves[0] || !ciphertext_halves[1] || !round_function_result) {
-        LOG_DEBUG("Failed to allocate memory for encryption. Out of memory\n");
+
+    ciphertext_halves = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 2);
+    if (!ciphertext_halves) {
+        LOG_DEBUG("Cannot allocate plaintext_halves. Out of memory\n");
+        return CPLIB_ERR_MEM;
+    }
+
+    ciphertext_halves[0] = NULL;
+    ciphertext_halves[1] = NULL;
+    plaintext_halves[0] = cplib_allocate_mem_chunk(ciphertext->taken / 2);
+    plaintext_halves[1] = cplib_allocate_mem_chunk(ciphertext->taken / 2);
+    round_function_result = cplib_allocate_mem_chunk(ciphertext->taken / 2);
+
+    if (!plaintext_halves[0] || !plaintext_halves[1] || !round_function_result) {
+        LOG_DEBUG("Failed to allocate memory for decryption. Out of memory\n");
         ret = CPLIB_ERR_MEM;
         goto cleanup;
     }
@@ -258,16 +281,16 @@ int cplib_feistel_cipher_decrypt(
     round_function_result->taken = round_function_result->size;
 
 
-    ret = self->block_manipulator->split(self->block_manipulator, ciphertext, ciphertext->size / 2,
-                                         (cplib_mem_chunk_t ***) &ciphertext_halves, &unused);
+    ret = self->block_manipulator->split(self->block_manipulator, ciphertext, ciphertext->taken / 2,
+                                         (cplib_mem_chunk_t ***) &ciphertext_halves, &unused_var);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Failed to split ciphertext. ret=%d\n", ret);
         goto cleanup;
     }
 
-    plaintext_halves[1] = ciphertext_halves[0];
+    plaintext_halves[1]->recycle(plaintext_halves[1], ciphertext_halves[0]->mem, ciphertext_halves[0]->taken);
 
-    ret = self->round_function(self->round_function_self, plaintext_halves[1], &round_function_result, key, position);
+    ret = self->round_function(self->round_function_self, plaintext_halves[1], key, position, &round_function_result);
 
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Round function failed. ret=%d\n", ret);
@@ -289,34 +312,28 @@ int cplib_feistel_cipher_decrypt(
     cleanup:
 
     for (int i = 0; i < 2; i++) {
-        if (plaintext_halves[i]) {
-            plaintext_halves[i]->destroy(plaintext_halves[i]);
-        }
-
-        if (ciphertext_halves[i]) {
-            ciphertext_halves[i]->destroy(ciphertext_halves[i]);
-        }
-
-        if (round_function_result) {
-            round_function_result->destroy(round_function_result);
-        }
+        CPLIB_PUT_IF_EXISTS(plaintext_halves[i]);
+        CPLIB_PUT_IF_EXISTS(ciphertext_halves[i]);
     }
 
+    CPLIB_PUT_IF_EXISTS(round_function_result);
+    cplib_free(ciphertext_halves);
+    ciphertext_halves = NULL;
     return ret;
 }
 
 
 int cplib_feistel_cipher_destroy(cplib_feistel_cipher_t *self) {
     self->round_function = NULL;
-    if (self->round_function_self) {
-        self->round_function_self->destroy(self->round_function_self);
-    }
+    CPLIB_PUT_IF_EXISTS(self->round_function_self);
+    cplib_destroyable_put(self->block_manipulator);
+
     return cplib_cipher_base_destroy((cplib_cipher_base_t *) self);
 }
 
 cplib_feistel_cipher_t *
 cplib_feistel_cipher_new(cplib_process_f decrypt_or_encrypt_func,
-                         cplib_feistel_round_f round_function,
+                         cplib_process_f round_function,
                          cplib_destroyable_t *round_function_self,
                          cplib_block_manipulator_base_t *block_manipulator) {
     cplib_feistel_cipher_t *cipher = (cplib_feistel_cipher_t *) cplib_cipher_base_new(
@@ -328,8 +345,92 @@ cplib_feistel_cipher_new(cplib_process_f decrypt_or_encrypt_func,
     cipher->round_function = round_function;
     cipher->block_manipulator = block_manipulator;
     cipher->round_function_self = round_function_self;
+    CPLIB_HOLD_IF_EXISTS(round_function_self);
+    cplib_destroyable_hold(block_manipulator);
     cipher->destroy = (cplib_independent_mutator_f) cplib_feistel_cipher_destroy;
     return cipher;
+}
+
+struct feistel_cipher_factory_context_t {
+    cplib_destroyable_t;
+    enum cplib_proc_type process;
+    cplib_process_f round_function;
+    cplib_destroyable_t * round_function_self;
+};
+
+typedef struct feistel_cipher_factory_context_t feistel_cipher_factory_context_t;
+
+int destroy_feistel_cipher_factory_context(feistel_cipher_factory_context_t * self) {
+    LOG_VERBOSE("Destroying feistel_cipher_factory_context_t %p\n", (void *) self);
+
+    CPLIB_PUT_IF_EXISTS(self->round_function_self);
+    self->process = CPLIB_PROC_NONE;
+    self->round_function = NULL;
+
+    return cplib_destroyable_destroy((struct cplib_destroyable_t *) self);
+}
+
+cplib_feistel_cipher_t *allocate_feistel_cipher(cplib_cipher_factory_base_t *self) {
+
+    feistel_cipher_factory_context_t *ctx;
+    cplib_process_f proc_func;
+    cplib_block_manipulator_base_t * block_manipulator;
+
+    ctx = (feistel_cipher_factory_context_t *) self->context;
+
+    if (ctx->process == CPLIB_PROC_ENCRYPT) {
+        proc_func = (cplib_process_f) cplib_feistel_cipher_encrypt;
+    } else if (ctx->process == CPLIB_PROC_DECRYPT) {
+        proc_func = (cplib_process_f) cplib_feistel_cipher_decrypt;
+    } else {
+        LOG_MSG("Did not specify if should encrypt or decrypt\n");
+        return NULL;
+    }
+
+    block_manipulator = cplib_simple_block_manipulator_new();
+
+    cplib_feistel_cipher_t *cipher = (cplib_feistel_cipher_t *) cplib_feistel_cipher_new(
+            proc_func,
+            ctx->round_function,
+            ctx->round_function_self,
+            block_manipulator);
+
+    cplib_destroyable_put(block_manipulator); // destroy or give up ownership
+
+    if (!cipher) {
+        return NULL;
+    }
+
+    return cipher;
+}
+
+cplib_cipher_factory_base_t *
+cplib_feistel_cipher_factory_new(enum cplib_proc_type process_type,
+        cplib_process_f round_function,
+        cplib_destroyable_t * round_function_self) {
+
+    cplib_cipher_factory_base_t *feistel_cipher_factory = cplib_cipher_factory_new(
+            (cplib_cipher_base_allocator_f) allocate_feistel_cipher);
+    if (!feistel_cipher_factory) {
+        return NULL;
+    }
+
+    feistel_cipher_factory_context_t *context = (feistel_cipher_factory_context_t *) cplib_destroyable_new(
+            sizeof(feistel_cipher_factory_context_t));
+    if (!context) {
+        LOG_MSG("Failed to allocate memory for feistel cipher factory context.\n");
+        cplib_destroyable_put(feistel_cipher_factory);
+        return NULL;
+    }
+
+    context->process = process_type;
+    context->round_function = round_function;
+    context->round_function_self = round_function_self;
+    CPLIB_HOLD_IF_EXISTS(round_function_self);
+    context->destroy = (cplib_independent_mutator_f) destroy_feistel_cipher_factory_context;
+    feistel_cipher_factory->context = (cplib_destroyable_t *) context;
+
+    return feistel_cipher_factory;
 }
 
 // ------------------------------------------------------------------------
@@ -375,6 +476,7 @@ int cplib_block_split(cplib_block_manipulator_base_t *self,
                       size_t split_size,
                       cplib_mem_chunk_t ***chunks_ptr,
                       unsigned int *chunk_count_ptr) {
+    CPLIB_UNUSED_PARAM(self);
     unsigned int chunk_count;
     unsigned int chunk_index;
     size_t chunk_mem_index;
@@ -426,7 +528,7 @@ int cplib_block_join(cplib_block_manipulator_base_t *self,
                      cplib_mem_chunk_t **chunks,
                      unsigned int chunk_count,
                      cplib_mem_chunk_t **block_ptr) {
-
+    CPLIB_UNUSED_PARAM(self);
     size_t total_size = 0;
     cplib_mem_chunk_t *temp_chunk;
     cplib_mem_chunk_t *block;
@@ -462,6 +564,7 @@ int cplib_block_join(cplib_block_manipulator_base_t *self,
         from_block_data = temp_chunk->mem;
         for (unsigned int j = 0; j < temp_chunk->taken; j++) {
             to_block_data[joint_index] = from_block_data[j];
+            joint_index++;
         }
     }
 
@@ -472,6 +575,7 @@ int cplib_block_xor(struct cplib_block_manipulator_base_t *self,
                     cplib_mem_chunk_t *one,
                     cplib_mem_chunk_t *other,
                     cplib_mem_chunk_t **result_ptr) {
+    CPLIB_UNUSED_PARAM(self);
 
     cplib_mem_chunk_t *result;
     uint8_t *result_data;
@@ -522,6 +626,7 @@ int pkcs5_block_pad(cplib_block_padder_base_t *self,
                     size_t key_len,
                     cplib_mem_chunk_t **padded_ptr,
                     cplib_mem_chunk_t **extra_ptr) {
+    CPLIB_UNUSED_PARAM(self);
 
     cplib_mem_chunk_t *padded;
     cplib_mem_chunk_t *extra;
@@ -583,6 +688,8 @@ int pkcs5_block_pad(cplib_block_padder_base_t *self,
 }
 
 int pkcs5_block_unpad(cplib_block_padder_base_t *self, cplib_mem_chunk_t *data, cplib_mem_chunk_t **unpadded_ptr) {
+    CPLIB_UNUSED_PARAM(self);
+
     cplib_mem_chunk_t *unpadded;
     size_t pad_len;
     size_t unpadded_block_len;
@@ -732,7 +839,7 @@ int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_c
     ctx = (allocated_block_iterator_context_t *) self->context;
 
     ret = self->is_empty(self, &empty);
-    if (ret!= CPLIB_ERR_SUCCESS) {
+    if (ret != CPLIB_ERR_SUCCESS) {
         return ret;
     }
 
@@ -748,7 +855,7 @@ int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_c
     return CPLIB_ERR_SUCCESS;
 }
 
-int block_allocated_iterator_is_empty(cplib_block_iterator_base_t *self, int * result) {
+int block_allocated_iterator_is_empty(cplib_block_iterator_base_t *self, int *result) {
     allocated_block_iterator_context_t *ctx = (allocated_block_iterator_context_t *) self->context;
     *result = ctx->next_chunk >= ctx->chunk_count;
     return CPLIB_ERR_SUCCESS;
@@ -818,8 +925,8 @@ int destroy_file_block_iterator_context(file_block_iterator_context_t *ctx) {
     return cplib_destroyable_destroy((struct cplib_destroyable_t *) ctx);
 }
 
-int take_up_from_file(file_block_iterator_context_t * ctx) {
-    ssize_t read_size = 0;
+int take_up_from_file(file_block_iterator_context_t *ctx) {
+    ssize_t read_size;
     read_size = read(
             ctx->fd,
             (uint8_t *) ctx->buffer->mem + ctx->buffer->taken,
@@ -849,20 +956,19 @@ int take_up_from_file(file_block_iterator_context_t * ctx) {
     return CPLIB_ERR_SUCCESS;
 }
 
-int cplib_file_block_iterator_is_empty(cplib_block_iterator_base_t *self, int * result) {
+int cplib_file_block_iterator_is_empty(cplib_block_iterator_base_t *self, int *result) {
     int ret;
     int inner_iterator_empty;
     file_block_iterator_context_t *ctx = (file_block_iterator_context_t *) self->context;
 
 
-
     if (ctx->allocated_iterator) {
         ret = ctx->allocated_iterator->is_empty(ctx->allocated_iterator, &inner_iterator_empty);
-        if (ret!= CPLIB_ERR_SUCCESS) {
+        if (ret != CPLIB_ERR_SUCCESS) {
             return ret;
         }
 
-        if(!inner_iterator_empty) {
+        if (!inner_iterator_empty) {
             *result = 0;
             return CPLIB_ERR_SUCCESS;
         }
@@ -902,6 +1008,10 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
 
     if (ctx->allocated_iterator) {
         ret = ctx->allocated_iterator->is_empty(ctx->allocated_iterator, &inner_iterator_empty);
+        if (ret != CPLIB_ERR_SUCCESS) {
+            return ret;
+        }
+
         if (!inner_iterator_empty) {
             ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) block);
             if (ret != CPLIB_ERR_SUCCESS) {
@@ -940,7 +1050,7 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
         partial = NULL;
         return CPLIB_ERR_ITER_OVERFLOW;
     }
-    if (ret!= CPLIB_ERR_SUCCESS) {
+    if (ret != CPLIB_ERR_SUCCESS) {
         return ret;
     }
 

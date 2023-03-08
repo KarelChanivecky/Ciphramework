@@ -7,7 +7,7 @@ set(CPLIB_BUILD_TYPE ${BUILD_TYPE})
 message("BUILD_TYPE:  ${BUILD_TYPE}")
 if (NOT CPLIB_BUILD_TYPE)
     set(CPLIB_BUILD_TYPE CPLIB_RELEASE)
-endif()
+endif ()
 
 set(BUILD_TYPE_COMPILER_FLAG "-D${CPLIB_BUILD_TYPE}")
 
@@ -32,8 +32,9 @@ add_executable(
         kcrypt
         src/sample_implementation/main.c
         src/sample_implementation/xor_cipher.c
+        src/sample_implementation/kcipher.c
 )
 
 target_link_libraries(kcrypt ciphramework)
 
-target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE} -DKCRYPT_KCIPHER_CIPHER)

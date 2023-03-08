@@ -11,7 +11,6 @@
 
 #include "cplib_mem.h"
 
-
 /**
  *
  * TODO
@@ -53,13 +52,15 @@ enum cplib_proc_type {
 // ------------------------------------------------------------------------
 struct cplib_cipher_base_t;
 
+#define CPLIB_UNUSED_PARAM(param) (void)(param)
+
 
 /**
  * Perform a mode transform before processing through cipher.
  * If passed processed == NULL will allocate a new chunk. Else, will recycle the chunk.
  */
 typedef int (*cplib_process_f)(
-        struct cplib_cipher_base_t *self,
+        struct cplib_destroyable_t *self,
         cplib_mem_chunk_t *data,
         cplib_mem_chunk_t *key,
         enum cplib_block_position position,
@@ -86,12 +87,13 @@ int cplib_cipher_base_destroy(cplib_cipher_base_t *cipher);
 
 struct cplib_cipher_factory_base_t;
 
-typedef cplib_cipher_base_t *(*cplib_cipher_base_allocator_f)(void);
+typedef cplib_cipher_base_t *(*cplib_cipher_base_allocator_f)(struct cplib_cipher_factory_base_t* self);
 
 
 struct cplib_cipher_factory_base_t {
     cplib_destroyable_t;
     cplib_cipher_base_allocator_f allocate;
+    cplib_destroyable_t * context;
 };
 
 typedef struct cplib_cipher_factory_base_t cplib_cipher_factory_base_t;
@@ -336,6 +338,7 @@ struct cplib_cipher_driver_t;
 
 struct cplib_cipher_driver_t {
     cplib_destroyable_t;
+    size_t block_size;
     cplib_independent_mutator_f run;
     cplib_cipher_factory_base_t *cipher_factory;
     cplib_cipher_base_t *_cipher;

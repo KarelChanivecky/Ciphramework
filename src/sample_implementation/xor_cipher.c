@@ -3,10 +3,13 @@
  */
 
 
+
+
+#ifdef KCRYPT_XOR_CIPHER
+
 #include "xor_cipher.h"
 #include "cplib_utils.h"
 #include "cplib_log.h"
-
 
 int xor_cipher_proc_function(struct cplib_cipher_base_t *base_self,
                              cplib_mem_chunk_t *data,
@@ -40,11 +43,35 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *base_self,
     return ret;
 }
 
-cplib_cipher_base_t *allocate_xor_cipher(void) {
+cplib_cipher_base_t *allocate_xor_cipher(cplib_cipher_factory_base_t * self) {
     return cplib_cipher_new(xor_cipher_proc_function);
 }
 
-cplib_cipher_factory_base_t *get_xor_cipher_factory(enum cplib_proc_type process_type) {
+cplib_cipher_factory_base_t *cipher_get_cipher_factory(enum cplib_proc_type process_type) {
     return cplib_cipher_factory_new(allocate_xor_cipher);
 }
 
+
+int xor_key_provider_initialize(cplib_key_provider_base_t* self, cplib_mem_chunk_t * key) {
+    if (key->taken != sizeof(uint32_t)) {
+        LOG_MSG("This cipher requires a %zub key\n", sizeof(uint32_t) * 8);
+    }
+
+
+}
+
+cplib_key_provider_base_t * cipher_allocate_key_provider(void) {
+    cplib_key_provider_base_t * key_provider = (cplib_key_provider_base_t *) cplib_keyed_key_provider_new3();
+    if (!key_provider) {
+        return NULL;
+    }
+
+
+}
+
+size_t cipher_block_to_key_ratio(void) {
+    return 1;
+}
+
+
+#endif // KCRYPT_XOR_CIPHER

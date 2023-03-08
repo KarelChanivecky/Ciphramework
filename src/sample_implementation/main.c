@@ -8,7 +8,16 @@
 #include "kcrypt.h"
 #include "cplib_utils.h"
 #include "cplib_log.h"
-#include "xor_cipher.h"
+
+#ifdef KCRYPT_XOR_CIPHER
+    #include "xor_cipher.h"
+#elif defined(KCRYPT_KCIPHER_CIPHER)
+
+    #include "kcipher.h"
+
+#else
+    #error "Defile KCRYPT_XOR_CIPHER or KCRYPT_KCIPHER_CIPHER"
+#endif
 
 
 int run_kcrypt(
@@ -25,7 +34,7 @@ int run_kcrypt(
     cplib_key_provider_base_t *key_provider = NULL;
 
 
-    key_provider = (cplib_key_provider_base_t *) cplib_keyed_key_provider_new3();
+    key_provider = (cplib_key_provider_base_t *) cipher_allocate_key_provider();
     if (!key_provider) {
         LOG_MSG("Failed to create key provider\n");
         ret = CPLIB_ERR_MEM;
@@ -38,7 +47,7 @@ int run_kcrypt(
         goto cleanup;
     }
 
-    cipher_factory = get_xor_cipher_factory(process);
+    cipher_factory = cipher_get_cipher_factory(process);
     if (!cipher_factory) {
         LOG_MSG("Failed to create cipher factory\n");
         ret = CPLIB_ERR_MEM;
@@ -62,6 +71,7 @@ int run_kcrypt(
     cipher_driver->block_padder = block_padder;
     cipher_driver->block_iterator = block_iterator;
     cipher_driver->mode = mode;
+    cipher_driver->block_size = key->taken * cipher_block_to_key_ratio();
     cipher_driver->run(cipher_driver);
 
     cleanup:
@@ -170,6 +180,7 @@ int parse_args(
     int ret;
     int input_fd = CPLIB_CLOSED_FD;
     int output_fd = CPLIB_CLOSED_FD;
+    size_t block_to_key_ratio;
     cplib_mem_chunk_t *input_path = NULL;
     cplib_mem_chunk_t *output_path = NULL;
     cplib_mem_chunk_t *key_path = NULL;
@@ -347,8 +358,8 @@ int parse_args(
         input_fd = STDIN_FILENO;
     }
 
-
-    ret = get_block_iterator(input_fd, message, (*key)->taken, block_iterator);
+    block_to_key_ratio = cipher_block_to_key_ratio();
+    ret = get_block_iterator(input_fd, message, (*key)->taken * block_to_key_ratio, block_iterator);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to get block iterator. code: %d\n", ret);
         goto error_cleanup;

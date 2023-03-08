@@ -1,7 +1,7 @@
 default: test
 
 kcrypt: FORCE
-	./build_exe.sh
+	./build_exe.sh CPLIB_DEBUG
 
 clean:
 	rm -rdf ./decrypted/**
@@ -18,7 +18,7 @@ verbose: FORCE
 	./build_exe.sh CPLIB_VERBOSE
 
 mem: FORCE
-	./build_exe.sh CPLIB_MEM
+	./build_exe.sh CPLIB_LOG_MEM
 
 
 FORCE:

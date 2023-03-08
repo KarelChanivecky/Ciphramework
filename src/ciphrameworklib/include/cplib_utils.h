@@ -51,16 +51,10 @@ int cplib_round_cipher_base_destroy(cplib_round_cipher_base_t *self);
 
 struct cplib_feistel_cipher_t;
 
-typedef int (*cplib_feistel_round_f)(cplib_destroyable_t *self,
-                                     cplib_mem_chunk_t *in,
-                                     cplib_mem_chunk_t **out,
-                                     cplib_mem_chunk_t *key,
-                                     enum cplib_block_position block_position);
-
 struct cplib_feistel_cipher_t {
     cplib_cipher_base_t;
     cplib_destroyable_t *round_function_self;
-    cplib_feistel_round_f round_function;
+    cplib_process_f round_function;
     cplib_block_manipulator_base_t *block_manipulator;
 };
 
@@ -83,11 +77,15 @@ int cplib_feistel_cipher_decrypt(
 
 cplib_feistel_cipher_t *
 cplib_feistel_cipher_new(cplib_process_f decrypt_or_encrypt_func,
-                         cplib_feistel_round_f round_function,
+                         cplib_process_f round_function,
                          cplib_destroyable_t *round_function_self,
                          cplib_block_manipulator_base_t *block_manipulator);
 
 int cplib_feistel_cipher_destroy(cplib_feistel_cipher_t *self);
+
+cplib_cipher_factory_base_t *cplib_feistel_cipher_factory_new(enum cplib_proc_type process_type,
+                                                              cplib_process_f round_function,
+                                                              cplib_destroyable_t *round_function_self);
 
 // ------------------------------------------------------------------------
 

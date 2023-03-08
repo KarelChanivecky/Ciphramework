@@ -26,7 +26,9 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     cplib_mode_base_t *mode;
     cplib_writer_base_t *writer;
     size_t cur_block_size;
+    size_t expected_block_size;
 
+    expected_block_size = self->block_size;
     block_iterator = self->block_iterator;
     key_provider = self->key_provider;
     block_padder = self->block_padder;
@@ -42,7 +44,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
     LOG_DEBUG("Cipher driver running.\n");
     writer = self->writer;
-    cipher = self->cipher_factory->allocate();
+    cipher = self->cipher_factory->allocate(self->cipher_factory);
     if (cipher == NULL) {
         LOG_MSG("Failed to allocate cipher.\n");
         return -1;
@@ -88,7 +90,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
             if (block_padder && block_padder->pad && empty && !extra) {
 
-                ret = block_padder->pad(block_padder, block, key->taken, &padded, &extra);
+                ret = block_padder->pad(block_padder, block, expected_block_size, &padded, &extra);
                 if (ret != CPLIB_ERR_SUCCESS) {
                     LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
                     goto cleanup;
@@ -118,7 +120,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
             CPLIB_PUT_IF_EXISTS(padded);
 
-            ret = cipher->process(cipher, pre_modded, key, self->block_position, &processed);
+            ret = cipher->process((cplib_destroyable_t *) cipher, pre_modded, key, self->block_position, &processed);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Cipher process failed. ret=%d\n", ret);
                 goto cleanup;
@@ -217,6 +219,6 @@ cplib_cipher_driver_t *cplib_cipher_driver_new(void) {
     cipher_driver->block_position = CPLIB_BLOCK_POS_START;
     cipher_driver->destroy = (cplib_independent_mutator_f) cplib_cipher_driver_base_destroy;
     cipher_driver->run = (cplib_independent_mutator_f) cipher_driver_run;
-
+    cipher_driver->block_size = 0;
     return cipher_driver;
 }
