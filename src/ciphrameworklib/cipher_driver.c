@@ -44,14 +44,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
     LOG_DEBUG("Cipher driver running.\n");
     writer = self->writer;
-    cipher = self->cipher_factory->allocate(self->cipher_factory);
-    if (cipher == NULL) {
-        LOG_MSG("Failed to allocate cipher.\n");
-        return -1;
-    }
 
-    cipher->initialize(cipher, self->_cipher);
-    self->_cipher = cipher;
 
 
     while (!empty) {
@@ -65,6 +58,14 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
         LOG_VERBOSE("Got block\n");
 
         do {
+            cipher = self->cipher_factory->allocate(self->cipher_factory);
+            if (cipher == NULL) {
+                LOG_MSG("Failed to allocate cipher.\n");
+                return -1;
+            }
+
+            cipher->initialize(cipher, self->_cipher);
+            self->_cipher = cipher;
             if (extra) {
                 LOG_VERBOSE("Got extra\n");
 

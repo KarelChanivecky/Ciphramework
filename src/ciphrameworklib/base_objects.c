@@ -273,7 +273,7 @@ cplib_key_provider_factory_base_new(size_t struct_size, cplib_key_provider_alloc
 
     key_provider_factory->allocate = allocator;
     key_provider_factory->from = cplib_key_provider_from_chunk;
-
+    key_provider_factory->destroy = (cplib_independent_mutator_f) cplib_key_provider_factory_base_destroy;
     return key_provider_factory;
 }
 

@@ -60,31 +60,22 @@ struct cplib_feistel_cipher_t {
 
 typedef struct cplib_feistel_cipher_t cplib_feistel_cipher_t;
 
-int cplib_feistel_cipher_encrypt(
+int cplib_feistel_cipher_round(
         cplib_feistel_cipher_t *self,
         cplib_mem_chunk_t *plaintext,
         cplib_mem_chunk_t *key,
         enum cplib_block_position position,
         cplib_mem_chunk_t **ciphertext_ptr);
 
-int cplib_feistel_cipher_decrypt(
-        cplib_feistel_cipher_t *self,
-        cplib_mem_chunk_t *ciphertext,
-        cplib_mem_chunk_t *key,
-        enum cplib_block_position position,
-        cplib_mem_chunk_t **plaintext_ptr);
-
 
 cplib_feistel_cipher_t *
-cplib_feistel_cipher_new(cplib_process_f decrypt_or_encrypt_func,
-                         cplib_process_f round_function,
+cplib_feistel_cipher_new(cplib_process_f round_function,
                          cplib_destroyable_t *round_function_self,
                          cplib_block_manipulator_base_t *block_manipulator);
 
 int cplib_feistel_cipher_destroy(cplib_feistel_cipher_t *self);
 
-cplib_cipher_factory_base_t *cplib_feistel_cipher_factory_new(enum cplib_proc_type process_type,
-                                                              cplib_process_f round_function,
+cplib_cipher_factory_base_t *cplib_feistel_cipher_factory_new(cplib_process_f round_function,
                                                               cplib_destroyable_t *round_function_self);
 
 // ------------------------------------------------------------------------

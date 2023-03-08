@@ -1,7 +1,7 @@
 default: test
 
 kcrypt: FORCE
-	./build_exe.sh CPLIB_DEBUG
+	./build_exe.sh
 
 clean:
 	rm -rdf ./decrypted/**

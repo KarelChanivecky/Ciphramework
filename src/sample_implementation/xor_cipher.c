@@ -2,9 +2,6 @@
  * Karel Chanivecky 2023.
  */
 
-
-
-
 #ifdef KCRYPT_XOR_CIPHER
 
 #include "xor_cipher.h"
@@ -67,6 +64,11 @@ cplib_key_provider_base_t * cipher_allocate_key_provider(void) {
     }
 
 
+}
+
+
+cplib_key_provider_factory_base_t * cipher_get_key_provider_factory(void) {
+    return cplib_key_provider_factory_new(cipher_allocate_key_provider);
 }
 
 size_t cipher_block_to_key_ratio(void) {

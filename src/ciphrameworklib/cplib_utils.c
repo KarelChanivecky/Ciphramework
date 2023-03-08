@@ -74,6 +74,7 @@ int round_cipher_process(
     cplib_cipher_base_t *cipher = NULL;
     cplib_mem_chunk_t *key = NULL;
     key_provider = self->key_provider_factory->from(self->key_provider_factory, root_key);
+    cplib_cipher_base_t * next = NULL;
 
     if (!key_provider) {
         return CPLIB_ERR_MEM;
@@ -85,48 +86,62 @@ int round_cipher_process(
         return ret;
     }
 
+    ret = cipher_provider->next(cipher_provider, (void **) &next);
+    if (ret != CPLIB_ERR_SUCCESS && ret != CPLIB_ERR_ITER_OVERFLOW) {
+        LOG_DEBUG("Failed to get cipher from cipher_provider. ret=%d\n", ret);
+        return ret;
+    }
+
+    position = CPLIB_BLOCK_POS_START;
+
     while (cipher) {
+        LOG_DEBUG("Running cipher round\n");
+
+        if (!next) {
+            position = CPLIB_BLOCK_POS_END;
+        }
+
         ret = key_provider->next(key_provider, (void **) &key);
         if (ret != CPLIB_ERR_SUCCESS) {
             LOG_DEBUG("Failed to get key from key_provider. ret=%d\n", ret);
-            return ret;
+            goto cleanup;
         }
 
         ret = cipher->process((cplib_destroyable_t *)cipher, data, key, position, processed);
-        if (ret) {
-            return ret;
+        if (ret != CPLIB_ERR_SUCCESS) {
+            goto cleanup;
         }
-
         data = *processed;
 
+        cplib_destroyable_put(key);
+        key = NULL;
         cplib_destroyable_put(cipher);
-        ret = cipher_provider->next(cipher_provider, (void **) &cipher);
+        cipher = NULL;
+
+        position = CPLIB_BLOCK_POS_CENTER;
+        cipher = next;
+        ret = cipher_provider->next(cipher_provider, (void **) &next);
         if (ret != CPLIB_ERR_SUCCESS) {
             LOG_DEBUG("Failed to get cipher from cipher_provider. ret=%d\n", ret);
-            return ret;
+            goto cleanup;
         }
     }
 
-    return CPLIB_ERR_SUCCESS;
+    ret = CPLIB_ERR_SUCCESS;
+
+    cleanup:
+    CPLIB_PUT_IF_EXISTS(key_provider);
+    CPLIB_PUT_IF_EXISTS(cipher);
+    CPLIB_PUT_IF_EXISTS(key);
+    return ret;
 }
 
 int cplib_round_cipher_base_destroy(cplib_round_cipher_base_t *self) {
     LOG_VERBOSE("Destroying cplib_round_cipher_base_t %p\n", (void *) self);
 
-    if (self->key_provider) {
-        self->key_provider->destroy(self->key_provider);
-        self->key_provider = NULL;
-    }
-
-    if (self->cipher_provider) {
-        self->cipher_provider->destroy(self->cipher_provider);
-        self->cipher_provider = NULL;
-    }
-
-    if (self->key_provider_factory) {
-        self->key_provider_factory->destroy(self->key_provider_factory);
-        self->key_provider_factory = NULL;
-    }
+    CPLIB_PUT_IF_EXISTS(self->key_provider);
+    CPLIB_PUT_IF_EXISTS(self->cipher_provider);
+    CPLIB_PUT_IF_EXISTS(self->key_provider_factory);
 
     return cplib_cipher_base_destroy((cplib_cipher_base_t *) self);
 }
@@ -145,6 +160,7 @@ cplib_round_cipher_base_new(size_t struct_size,
     round_cipher->cipher_provider = cipher_provider;
     round_cipher->key_provider_factory = key_provider_factory;
     round_cipher->key_provider = NULL;
+    round_cipher->destroy = (cplib_independent_mutator_f) cplib_round_cipher_base_destroy;
 
     return round_cipher;
 }
@@ -173,7 +189,7 @@ cplib_round_cipher_base_t *cplib_round_cipher_new2(cplib_cipher_base_t *cipher,
 // ------------------------------------------------------------------------
 
 
-int cplib_feistel_cipher_encrypt(
+int cplib_feistel_cipher_round(
         cplib_feistel_cipher_t *self,
         cplib_mem_chunk_t *plaintext,
         cplib_mem_chunk_t *key,
@@ -184,7 +200,7 @@ int cplib_feistel_cipher_encrypt(
     cplib_mem_chunk_t **plaintext_halves = NULL; // chunks themselves are allocated by split
     cplib_mem_chunk_t *ciphertext_halves[2] = {0};
     cplib_mem_chunk_t *round_function_result;
-
+    cplib_mem_chunk_t * swap_temp = NULL;
 
     plaintext_halves = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 2);
     if (!plaintext_halves) {
@@ -228,6 +244,12 @@ int cplib_feistel_cipher_encrypt(
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("XOR failed. ret=%d\n", ret);
         goto cleanup;
+    }
+
+    if (position == CPLIB_BLOCK_POS_END) {
+        swap_temp = ciphertext_halves[0];
+        ciphertext_halves[0] = ciphertext_halves[1];
+        ciphertext_halves[1] = swap_temp;
     }
 
     ret = self->block_manipulator->join(self->block_manipulator, ciphertext_halves, 2, ciphertext_ptr);
@@ -332,12 +354,12 @@ int cplib_feistel_cipher_destroy(cplib_feistel_cipher_t *self) {
 }
 
 cplib_feistel_cipher_t *
-cplib_feistel_cipher_new(cplib_process_f decrypt_or_encrypt_func,
-                         cplib_process_f round_function,
+cplib_feistel_cipher_new(cplib_process_f round_function,
                          cplib_destroyable_t *round_function_self,
                          cplib_block_manipulator_base_t *block_manipulator) {
+
     cplib_feistel_cipher_t *cipher = (cplib_feistel_cipher_t *) cplib_cipher_base_new(
-            sizeof(cplib_feistel_cipher_t), decrypt_or_encrypt_func);
+            sizeof(cplib_feistel_cipher_t), (cplib_process_f) cplib_feistel_cipher_round);
     if (!cipher) {
         return NULL;
     }
@@ -373,24 +395,13 @@ int destroy_feistel_cipher_factory_context(feistel_cipher_factory_context_t * se
 cplib_feistel_cipher_t *allocate_feistel_cipher(cplib_cipher_factory_base_t *self) {
 
     feistel_cipher_factory_context_t *ctx;
-    cplib_process_f proc_func;
     cplib_block_manipulator_base_t * block_manipulator;
 
     ctx = (feistel_cipher_factory_context_t *) self->context;
 
-    if (ctx->process == CPLIB_PROC_ENCRYPT) {
-        proc_func = (cplib_process_f) cplib_feistel_cipher_encrypt;
-    } else if (ctx->process == CPLIB_PROC_DECRYPT) {
-        proc_func = (cplib_process_f) cplib_feistel_cipher_decrypt;
-    } else {
-        LOG_MSG("Did not specify if should encrypt or decrypt\n");
-        return NULL;
-    }
-
     block_manipulator = cplib_simple_block_manipulator_new();
 
     cplib_feistel_cipher_t *cipher = (cplib_feistel_cipher_t *) cplib_feistel_cipher_new(
-            proc_func,
             ctx->round_function,
             ctx->round_function_self,
             block_manipulator);
@@ -405,9 +416,7 @@ cplib_feistel_cipher_t *allocate_feistel_cipher(cplib_cipher_factory_base_t *sel
 }
 
 cplib_cipher_factory_base_t *
-cplib_feistel_cipher_factory_new(enum cplib_proc_type process_type,
-        cplib_process_f round_function,
-        cplib_destroyable_t * round_function_self) {
+cplib_feistel_cipher_factory_new(cplib_process_f round_function, cplib_destroyable_t * round_function_self) {
 
     cplib_cipher_factory_base_t *feistel_cipher_factory = cplib_cipher_factory_new(
             (cplib_cipher_base_allocator_f) allocate_feistel_cipher);
@@ -423,7 +432,6 @@ cplib_feistel_cipher_factory_new(enum cplib_proc_type process_type,
         return NULL;
     }
 
-    context->process = process_type;
     context->round_function = round_function;
     context->round_function_self = round_function_self;
     CPLIB_HOLD_IF_EXISTS(round_function_self);
@@ -440,6 +448,8 @@ int provide_next_cipher(cplib_same_cipher_provider_t *self, cplib_cipher_base_t 
         *cipher = NULL;
         return CPLIB_ERR_SUCCESS;
     }
+
+    self->provide_count--;
 
     *cipher = self->cipher;
     cplib_destroyable_hold(self->cipher);
@@ -465,7 +475,7 @@ cplib_same_cipher_provider_t *cplib_same_cipher_provider_new(cplib_cipher_base_t
 
     cipher_provider->cipher = cipher;
     cipher_provider->provide_count = provide_count;
-
+    cipher_provider->destroy = (cplib_independent_mutator_f) cplib_same_cipher_provider_destroy;
     return cipher_provider;
 }
 
