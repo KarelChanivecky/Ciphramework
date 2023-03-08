@@ -3,6 +3,16 @@ project(Sources C)
 
 set(CMAKE_C_STANDARD 17)
 
+set(CPLIB_BUILD_TYPE ${BUILD_TYPE})
+message("BUILD_TYPE:  ${BUILD_TYPE}")
+if (NOT CPLIB_BUILD_TYPE)
+    set(CPLIB_BUILD_TYPE CPLIB_RELEASE)
+endif()
+
+set(BUILD_TYPE_COMPILER_FLAG "-D${CPLIB_BUILD_TYPE}")
+
+message("CPLIB_BUILD_TYPE: ${BUILD_TYPE_COMPILER_FLAG}")
+
 include_directories(
         ./src/ciphrameworklib/include
         ./src/sample_implementation/include
@@ -16,7 +26,7 @@ add_library(
         src/ciphrameworklib/cipher_driver.c
 )
 
-target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -DCPLIB_DEBUG)
+target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
 add_executable(
         kcrypt
@@ -26,4 +36,4 @@ add_executable(
 
 target_link_libraries(kcrypt ciphramework)
 
-target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -DCPLIB_DEBUG)
+target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})

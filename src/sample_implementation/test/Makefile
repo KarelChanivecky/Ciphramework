@@ -1,0 +1,24 @@
+default: test
+
+kcrypt: FORCE
+	./build_exe.sh
+
+clean:
+	rm -rdf ./decrypted/**
+	rm -rdf ./encrypted/**
+	make -C ./build clean
+
+test: clean kcrypt
+	./test.sh
+
+debug: FORCE
+	./build_exe.sh CPLIB_DEBUG
+
+verbose: FORCE
+	./build_exe.sh CPLIB_VERBOSE
+
+mem: FORCE
+	./build_exe.sh CPLIB_MEM
+
+
+FORCE:

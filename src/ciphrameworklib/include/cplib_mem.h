@@ -60,7 +60,7 @@ typedef int (*cplib_mem_chunk_func)(void *self, cplib_mem_chunk_t *data);
  */
 typedef int (*cplib_next_item_f)(void *self, void **item);
 
-#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) cplib_destroyable_put((destroyable)) == CPLIB_MEM_DESTROY, (destroyable) = NULL
+#define CPLIB_PUT_IF_EXISTS(destroyable) if ((destroyable)) cplib_destroyable_put((destroyable)), (destroyable) = NULL
 #define CPLIB_HOLD_IF_EXISTS(destroyable) if ((destroyable)) cplib_destroyable_hold((destroyable))
 
 void *cplib_malloc(size_t size);

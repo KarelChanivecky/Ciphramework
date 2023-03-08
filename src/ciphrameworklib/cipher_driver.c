@@ -32,6 +32,14 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     block_padder = self->block_padder;
     mode = self->mode;
 
+    LOG_VERBOSE("Checking if empty\n");
+
+    ret = block_iterator->is_empty(block_iterator, &empty);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("ERROR: There seems to be no message to process\n");
+        return ret;
+    }
+
     LOG_DEBUG("Cipher driver running.\n");
     writer = self->writer;
     cipher = self->cipher_factory->allocate();
@@ -45,16 +53,18 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
 
     while (!empty) {
+
         ret = block_iterator->next(block_iterator, (void **) &block);
         if (ret != CPLIB_ERR_SUCCESS) {
             LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
             goto cleanup;
         }
         cur_block_size = block->taken;
+        LOG_VERBOSE("Got block\n");
 
         do {
             if (extra) {
-                LOG_DEBUG("Cipher driver got an extra padding chunk.\n");
+                LOG_VERBOSE("Got extra\n");
 
                 // extra won't be anything but NULL until the last block and if data % key length == 0
                 // swap extra into block. We are done, so it shouldn't matter if the chunk were to be smaller
@@ -62,13 +72,19 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             }
 
 
-            empty = block_iterator->is_empty(block_iterator);
+            ret = block_iterator->is_empty(block_iterator, &empty);
+            if (ret!= CPLIB_ERR_SUCCESS) {
+                LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
+                goto cleanup;
+            }
 
             ret = key_provider->next(key_provider, (void **) &key);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Failed to get key. ret=%d\n", ret);
                 goto cleanup;
             }
+
+            LOG_VERBOSE("Got key\n");
 
             if (block_padder && block_padder->pad && empty && !extra) {
 
@@ -77,6 +93,8 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                     LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
                     goto cleanup;
                 }
+                LOG_VERBOSE("Padded\n");
+
             } else {
                 if (extra) {
                     extra = NULL;
@@ -95,6 +113,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                     LOG_MSG("ERROR: Failed to apply pre-cipher mode transform. ret=%d\n", ret);
                     goto cleanup;
                 }
+                LOG_VERBOSE("Pre-modded\n");
             }
 
             CPLIB_PUT_IF_EXISTS(padded);
@@ -105,6 +124,8 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 goto cleanup;
             }
 
+            LOG_VERBOSE("Processed\n");
+
             if (!mode) {
                 post_modded = processed;
                 cplib_destroyable_hold(processed);
@@ -114,6 +135,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                     LOG_MSG("ERROR: Failed to apply post-cipher mode transform. ret=%d\n", ret);
                     goto cleanup;
                 }
+                LOG_VERBOSE("Post-modded\n");
             }
 
 
@@ -127,6 +149,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                     LOG_MSG("ERROR: Failed to unpad block. ret=%d\n", ret);
                     goto cleanup;
                 }
+                LOG_VERBOSE("Unpadded\n");
             } else {
                 unpadded = post_modded;
                 cplib_destroyable_hold(post_modded);
@@ -140,6 +163,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 LOG_MSG("ERROR: Failed to write. ret=%d\n", ret);
                 goto cleanup;
             }
+            LOG_VERBOSE("Wrote\n");
 
             LOG_DEBUG("Cipher driver finished a chunk of size: %zu.\n", cur_block_size);
 

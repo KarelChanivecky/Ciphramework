@@ -78,6 +78,7 @@ int get_key(cplib_mem_chunk_t *key_path, cplib_mem_chunk_t **key) {
     ssize_t ret;
     int fd;
     struct stat key_stat;
+    LOG_DEBUG("Getting key from file %s\n", (char *) key_path->mem);
 
     fd = open(key_path->mem, O_RDONLY);
     if (fd == -1) {
@@ -97,20 +98,33 @@ int get_key(cplib_mem_chunk_t *key_path, cplib_mem_chunk_t **key) {
         return CPLIB_ERR_MEM;
     }
 
+    LOG_VERBOSE("Key size: %ld\n", key_stat.st_size);
     ret = read(fd, (*key)->mem, key_stat.st_size);
     if (ret == -1) {
         LOG_MSG("Failed to read %s due to error: %s\n", (char *) key_path->mem, strerror(errno));
         return CPLIB_ERR_FILE;
     }
 
+    if (ret != key_stat.st_size) {
+        LOG_MSG("Failed to read key from file.\n");
+    }
+
+    (*key)->taken = key_stat.st_size;
+
     return CPLIB_ERR_SUCCESS;
 }
 
 int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_size,
                        cplib_block_iterator_base_t **block_iterator) {
+    size_t buffer_size;
+
+#ifdef CPLIB_DEBUG
+    buffer_size = KCRYPT_FILE_BUFFER_SIZE < iterated_size ? iterated_size : KCRYPT_FILE_BUFFER_SIZE;
+#else
+    buffer_size = KCRYPT_FILE_BUFFER_SIZE;
+#endif
 
     if (data) {
-
         *block_iterator = cplib_allocated_block_iterator_new(data, iterated_size);
         if (!*block_iterator) {
             LOG_MSG("Failed to create block iterator\n");
@@ -120,8 +134,8 @@ int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_si
         return CPLIB_ERR_SUCCESS;
     }
 
-    if (input_fd) {
-        *block_iterator = cplib_file_block_iterator_new(input_fd, iterated_size, KCRYPT_FILE_BUFFER_SIZE);
+    if (input_fd != CPLIB_CLOSED_FD) {
+        *block_iterator = cplib_file_block_iterator_new(input_fd, iterated_size, buffer_size);
         if (!*block_iterator) {
             LOG_MSG("Failed to create block iterator\n");
             return CPLIB_ERR_MEM;
@@ -291,7 +305,7 @@ int parse_args(
     if (!key_path && !*key) {
         print_usage(argv[0]);
         ret = CPLIB_ERR_ARG;
-        return ret;
+        goto error_cleanup;
     }
 
     if (!output_path) {
@@ -302,7 +316,7 @@ int parse_args(
         if (output_fd == -1) {
             LOG_MSG("Failed to open output file %s\n", (char *) output_path->mem);
             ret = CPLIB_ERR_FILE;
-            return ret;
+            goto error_cleanup;
         }
     }
 
@@ -330,7 +344,7 @@ int parse_args(
         }
     } else if (!message) {
         LOG_DEBUG("Reading message from stdin\n");
-        input_path = STDIN_FILENO;
+        input_fd = STDIN_FILENO;
     }
 
 

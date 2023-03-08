@@ -726,10 +726,17 @@ int destroy_allocated_block_iterator_context(allocated_block_iterator_context_t 
 int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_chunk_t **next_ptr) {
     allocated_block_iterator_context_t *ctx;
     cplib_mem_chunk_t *next;
+    int ret;
+    int empty;
 
     ctx = (allocated_block_iterator_context_t *) self->context;
 
-    if (self->is_empty(self)) {
+    ret = self->is_empty(self, &empty);
+    if (ret!= CPLIB_ERR_SUCCESS) {
+        return ret;
+    }
+
+    if (empty) {
         return CPLIB_ERR_ITER_OVERFLOW;
     }
 
@@ -741,9 +748,10 @@ int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_c
     return CPLIB_ERR_SUCCESS;
 }
 
-int block_allocated_iterator_is_empty(cplib_block_iterator_base_t *self) {
+int block_allocated_iterator_is_empty(cplib_block_iterator_base_t *self, int * result) {
     allocated_block_iterator_context_t *ctx = (allocated_block_iterator_context_t *) self->context;
-    return ctx->next_chunk >= ctx->chunk_count;
+    *result = ctx->next_chunk >= ctx->chunk_count;
+    return CPLIB_ERR_SUCCESS;
 }
 
 
@@ -819,7 +827,7 @@ int take_up_from_file(file_block_iterator_context_t * ctx) {
     );
 
     if (read_size == -1) {
-        LOG_DEBUG("Failed to read from fd due to error %s.\n", strerror(errno));
+        LOG_DEBUG("Failed to read from fd %d due to error %s.\n", ctx->fd, strerror(errno));
         return CPLIB_ERR_OS;
     }
 
@@ -831,6 +839,7 @@ int take_up_from_file(file_block_iterator_context_t * ctx) {
     ctx->buffer->taken += read_size;
 
     ctx->allocated_iterator = cplib_allocated_block_iterator_new(ctx->buffer, ctx->iterated_size);
+
     if (!ctx->allocated_iterator) {
         LOG_DEBUG("Failed to allocate block iterator.\n");
         return CPLIB_ERR_MEM;
@@ -840,32 +849,60 @@ int take_up_from_file(file_block_iterator_context_t * ctx) {
     return CPLIB_ERR_SUCCESS;
 }
 
-int cplib_file_block_iterator_is_empty(cplib_block_iterator_base_t *self) {
+int cplib_file_block_iterator_is_empty(cplib_block_iterator_base_t *self, int * result) {
+    int ret;
+    int inner_iterator_empty;
     file_block_iterator_context_t *ctx = (file_block_iterator_context_t *) self->context;
-    if (ctx->allocated_iterator && !ctx->allocated_iterator->is_empty(ctx->allocated_iterator)) {
-        return 0;
+
+
+
+    if (ctx->allocated_iterator) {
+        ret = ctx->allocated_iterator->is_empty(ctx->allocated_iterator, &inner_iterator_empty);
+        if (ret!= CPLIB_ERR_SUCCESS) {
+            return ret;
+        }
+
+        if(!inner_iterator_empty) {
+            *result = 0;
+            return CPLIB_ERR_SUCCESS;
+        }
     }
 
     // no allocated iterator or is empty
     if (ctx->got_eof) {
-        return 1;
+        *result = 1;
+        return CPLIB_ERR_SUCCESS;
     }
 
-    return take_up_from_file(ctx) != CPLIB_ERR_SUCCESS;
+    ret = take_up_from_file(ctx);
+
+    if (ret == CPLIB_ERR_EOF) {
+        ctx->got_eof = 1;
+        *result = 1;
+        return CPLIB_ERR_SUCCESS;
+    }
+    if (ret == CPLIB_ERR_SUCCESS) {
+        *result = 0;
+        return ret;
+    }
+
+    *result = 1; // some error has happened
+    return ret;
 }
 
 int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_chunk_t **block) {
     int ret;
-    ssize_t read_size;
     file_block_iterator_context_t *ctx;
     cplib_mem_chunk_t *partial;
+    int inner_iterator_empty;
 
     partial = NULL;
 
     ctx = (file_block_iterator_context_t *) self->context;
 
     if (ctx->allocated_iterator) {
-        if (!ctx->allocated_iterator->is_empty(ctx->allocated_iterator)) {
+        ret = ctx->allocated_iterator->is_empty(ctx->allocated_iterator, &inner_iterator_empty);
+        if (!inner_iterator_empty) {
             ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) block);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_DEBUG("Failed to get next block from iterator.\n");
@@ -895,7 +932,6 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
     }
 
     ret = take_up_from_file(ctx);
-
     if (ret == CPLIB_ERR_EOF) {
         if (partial) {
             return CPLIB_ERR_SUCCESS;
@@ -903,6 +939,9 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
         *block = NULL;
         partial = NULL;
         return CPLIB_ERR_ITER_OVERFLOW;
+    }
+    if (ret!= CPLIB_ERR_SUCCESS) {
+        return ret;
     }
 
     /*

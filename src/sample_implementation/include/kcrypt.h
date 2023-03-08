@@ -8,6 +8,11 @@
 
 #include "ciphrameworklib.h"
 
-#define KCRYPT_FILE_BUFFER_SIZE 10
+#ifdef CPLIB_DEBUG
+    #define KCRYPT_FILE_BUFFER_SIZE 10
+#else
+    #define KCRYPT_FILE_BUFFER_SIZE 10000
+#endif
+
 
 #endif //SOURCES_KCRYPT_H

@@ -184,7 +184,7 @@ int cplib_block_manipulator_base_destroy(cplib_block_manipulator_base_t *manipul
 // ------------------------------------------------------------------------
 
 
-typedef int (*cplib_empty_f)(void *self);
+typedef int (*cplib_empty_f)(void *self, int * result);
 
 
 struct cplib_block_iterator_base_t {
