@@ -14,9 +14,18 @@
 /**
  *
  * TODO
+ *  FRAMEWORK
+ *  - RoundKeyProvider
+ *  - cipher loader
+ *
  *  IMPLEMENTATION
  *   - Key expansion
  *   - round function
+ *   - ECB
+ *   - CBC
+ *   - CTR
+ *   - dlsym
+ *
  */
 
 // ------------------------------------------------------------------------
@@ -87,13 +96,13 @@ int cplib_cipher_base_destroy(cplib_cipher_base_t *cipher);
 
 struct cplib_cipher_factory_base_t;
 
-typedef cplib_cipher_base_t *(*cplib_cipher_base_allocator_f)(struct cplib_cipher_factory_base_t* self);
+typedef cplib_cipher_base_t *(*cplib_cipher_base_allocator_f)(struct cplib_cipher_factory_base_t *self);
 
 
 struct cplib_cipher_factory_base_t {
     cplib_destroyable_t;
     cplib_cipher_base_allocator_f allocate;
-    cplib_destroyable_t * context;
+    cplib_destroyable_t *context;
 };
 
 typedef struct cplib_cipher_factory_base_t cplib_cipher_factory_base_t;
@@ -186,7 +195,7 @@ int cplib_block_manipulator_base_destroy(cplib_block_manipulator_base_t *manipul
 // ------------------------------------------------------------------------
 
 
-typedef int (*cplib_empty_f)(void *self, int * result);
+typedef int (*cplib_empty_f)(void *self, int *result);
 
 
 struct cplib_block_iterator_base_t {
@@ -225,9 +234,33 @@ int cplib_key_provider_base_destroy(cplib_key_provider_base_t *key_provider);
 
 // ------------------------------------------------------------------------
 
+struct cplib_round_key_provider_base_t {
+    struct cplib_key_provider_base_t;
+    cplib_mem_chunk_t **round_keys;
+    unsigned int round_keys_count;
+    unsigned int round_index;
+};
+
+typedef struct cplib_round_key_provider_base_t cplib_round_key_provider_base_t;
+
+cplib_round_key_provider_base_t *
+cplib_round_key_provider_base_new(size_t struct_size, cplib_mem_chunk_func initialize, cplib_next_item_f next);
+
+cplib_round_key_provider_base_t *cplib_round_key_provider_new(cplib_mem_chunk_func initialize, cplib_next_item_f next);
+
+cplib_round_key_provider_base_t *cplib_round_key_provider_new2(cplib_mem_chunk_func initialize);
+
+int cplib_round_key_provider_base_destroy(cplib_round_key_provider_base_t *round_key_provider);
+
+int cplib_round_key_provider_next(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key);
+
+int cplib_round_key_provider_next_reverse(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key);
+
+// ------------------------------------------------------------------------
+
 struct cplib_key_provider_factory_base_t;
 
-typedef cplib_key_provider_base_t *(*cplib_key_provider_allocator_f)(void);
+typedef cplib_key_provider_base_t *(*cplib_key_provider_allocator_f)(struct cplib_key_provider_factory_base_t * self);
 
 typedef cplib_key_provider_base_t *(*cplib_key_provider_from_chunk_f)(struct cplib_key_provider_factory_base_t *self,
                                                                       cplib_mem_chunk_t *chunk);
@@ -236,6 +269,7 @@ struct cplib_key_provider_factory_base_t {
     cplib_destroyable_t;
     cplib_key_provider_allocator_f allocate;
     cplib_key_provider_from_chunk_f from;
+    cplib_destroyable_t * context;
 };
 
 typedef struct cplib_key_provider_factory_base_t cplib_key_provider_factory_base_t;
@@ -246,7 +280,7 @@ cplib_key_provider_factory_base_new(size_t struct_size, cplib_key_provider_alloc
 
 cplib_key_provider_factory_base_t *cplib_key_provider_factory_new(cplib_key_provider_allocator_f allocator);
 
-int cplib_key_provider_factory_base_destroy(cplib_key_provider_factory_base_t *key_provider_factory);
+int cplib_key_provider_factory_base_destroy(cplib_key_provider_factory_base_t *self);
 
 // ------------------------------------------------------------------------
 

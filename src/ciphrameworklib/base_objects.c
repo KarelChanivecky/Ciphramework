@@ -6,7 +6,7 @@
 #include "cplib_log.h"
 
 int cplib_cipher_base_destroy(cplib_cipher_base_t *cipher) {
-    LOG_VERBOSE("Destroying cplib_cipher_base_t %p\n", (void *)cipher);
+    LOG_VERBOSE("Destroying cplib_cipher_base_t %p\n", (void *) cipher);
     cipher->process = NULL;
     cipher->destroy = NULL;
     cipher->initialize = NULL;
@@ -40,7 +40,7 @@ cplib_cipher_base_t *cplib_cipher_new(cplib_process_f process) {
 // ------------------------------------------------------------------------
 
 int cplib_cipher_factory_base_destroy(cplib_cipher_factory_base_t *factory) {
-    LOG_VERBOSE("Destroying cplib_cipher_factory_base_t %p\n", (void *)factory);
+    LOG_VERBOSE("Destroying cplib_cipher_factory_base_t %p\n", (void *) factory);
     CPLIB_PUT_IF_EXISTS(factory->context);
     factory->destroy = NULL;
     cplib_free(factory);
@@ -69,7 +69,7 @@ cplib_cipher_factory_base_t *cplib_cipher_factory_new(cplib_cipher_base_allocato
 // ------------------------------------------------------------------------
 
 int cplib_writer_base_destroy(cplib_writer_base_t *writer) {
-    LOG_VERBOSE("Destroying cplib_writer_base_t %p\n", (void *)writer);
+    LOG_VERBOSE("Destroying cplib_writer_base_t %p\n", (void *) writer);
 
     writer->write = NULL;
     writer->destroy = NULL;
@@ -96,7 +96,7 @@ cplib_writer_base_t *cplib_writer_new(cplib_write_data_f write) {
 // ------------------------------------------------------------------------
 
 int cplib_block_manipulator_base_destroy(cplib_block_manipulator_base_t *manipulator) {
-    LOG_VERBOSE("Destroying cplib_block_manipulator_base_t %p\n", (void *)manipulator);
+    LOG_VERBOSE("Destroying cplib_block_manipulator_base_t %p\n", (void *) manipulator);
 
     manipulator->split = NULL;
     manipulator->join = NULL;
@@ -132,7 +132,7 @@ cplib_block_manipulator_new(cplib_block_split_f split, cplib_block_join_f join, 
 // ------------------------------------------------------------------------
 
 int cplib_block_iterator_base_destroy(cplib_block_iterator_base_t *block_iterator) {
-    LOG_VERBOSE("Destroying cplib_block_iterator_base_t %p\n", (void *)block_iterator);
+    LOG_VERBOSE("Destroying cplib_block_iterator_base_t %p\n", (void *) block_iterator);
 
     block_iterator->next = NULL;
     block_iterator->is_empty = NULL;
@@ -176,7 +176,7 @@ cplib_block_iterator_new(cplib_next_item_f next, cplib_empty_f is_empty) {
 
 
 int cplib_block_padder_base_destroy(cplib_block_padder_base_t *padder) {
-    LOG_VERBOSE("Destroying cplib_block_padder_base_t %p\n", (void *)padder);
+    LOG_VERBOSE("Destroying cplib_block_padder_base_t %p\n", (void *) padder);
 
     padder->pad = NULL;
     padder->unpad = NULL;
@@ -207,7 +207,7 @@ cplib_block_padder_base_t *cplib_block_padder_new(cplib_block_pad_f pad, cplib_b
 // ------------------------------------------------------------------------
 
 int cplib_key_provider_base_destroy(cplib_key_provider_base_t *key_provider) {
-    LOG_VERBOSE("Destroying cplib_key_provider_base_t %p\n", (void *)key_provider);
+    LOG_VERBOSE("Destroying cplib_key_provider_base_t %p\n", (void *) key_provider);
 
     key_provider->next = NULL;
     key_provider->destroy = NULL;
@@ -236,10 +236,70 @@ cplib_key_provider_base_t *cplib_key_provider_new(cplib_next_item_f next) {
 
 // ------------------------------------------------------------------------
 
+int cplib_round_key_provider_base_destroy(cplib_round_key_provider_base_t *round_key_provider) {
+
+}
+
+cplib_round_key_provider_base_t *cplib_round_key_provider_base_new(size_t struct_size,
+                                                                   cplib_mem_chunk_func initialize,
+                                                                   cplib_next_item_f next) {
+    cplib_round_key_provider_base_t *key_provider = (cplib_round_key_provider_base_t *) cplib_key_provider_base_new(
+            sizeof(cplib_round_key_provider_base_t), next);
+    if (!key_provider) {
+        LOG_DEBUG("Cannot allocate round_key_provider. Out of memory\n");
+        return NULL;
+    }
+
+    key_provider->round_index = 0;
+    key_provider->round_keys_count = 0;
+    key_provider->round_keys = NULL;
+    key_provider ->destroy = (cplib_independent_mutator_f) cplib_round_key_provider_base_destroy;
+    key_provider->initialize = initialize;
+
+    return key_provider;
+}
+
+cplib_round_key_provider_base_t *cplib_round_key_provider_new(cplib_mem_chunk_func initialize, cplib_next_item_f next) {
+    return cplib_round_key_provider_base_new(sizeof(cplib_round_key_provider_base_t), initialize, next);
+}
+
+cplib_round_key_provider_base_t *cplib_round_key_provider_new2(cplib_mem_chunk_func initialize) {
+    return cplib_round_key_provider_base_new(sizeof(cplib_round_key_provider_base_t), initialize,
+                                             (cplib_next_item_f) cplib_round_key_provider_next);
+}
+
+int cplib_round_key_provider_next(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key) {
+    if (self->round_index >= self->round_keys_count) {
+        *next_key = NULL;
+        return CPLIB_ERR_ITER_OVERFLOW;
+    }
+
+    *next_key = self->round_keys[self->round_index];
+
+    self->round_index++;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+int cplib_round_key_provider_next_reverse(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key) {
+    if (self->round_index >= self->round_keys_count) {
+        *next_key = NULL;
+        return CPLIB_ERR_ITER_OVERFLOW;
+    }
+
+    *next_key = self->round_keys[self->round_keys_count - self->round_index - 1];
+
+    self->round_index++;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+// ------------------------------------------------------------------------
+
 cplib_key_provider_base_t *cplib_key_provider_from_chunk(cplib_key_provider_factory_base_t *self,
                                                          cplib_mem_chunk_t *key) {
     int ret;
-    cplib_key_provider_base_t *key_provider = self->allocate();
+    cplib_key_provider_base_t *key_provider = self->allocate(self);
     if (!key_provider) {
         return NULL;
     }
@@ -253,12 +313,14 @@ cplib_key_provider_base_t *cplib_key_provider_from_chunk(cplib_key_provider_fact
     return key_provider;
 }
 
-int cplib_key_provider_factory_base_destroy(cplib_key_provider_factory_base_t *key_provider_factory) {
-    LOG_VERBOSE("Destroying cplib_key_provider_factory_base_t %p\n", (void *)key_provider_factory);
+int cplib_key_provider_factory_base_destroy(cplib_key_provider_factory_base_t *self) {
+    LOG_VERBOSE("Destroying cplib_key_provider_factory_base_t %p\n", (void *) self);
 
-    key_provider_factory->from = NULL;
-    key_provider_factory->destroy = NULL;
-    cplib_free(key_provider_factory);
+    self->from = NULL;
+    self->destroy = NULL;
+    CPLIB_PUT_IF_EXISTS(self->context);
+
+    cplib_free(self);
     return CPLIB_ERR_SUCCESS;
 }
 
@@ -286,7 +348,7 @@ cplib_key_provider_factory_base_t *cplib_key_provider_factory_new(cplib_key_prov
 
 
 int cplib_mode_base_destroy(cplib_mode_base_t *mode) {
-    LOG_VERBOSE("Destroying cplib_mode_base_t %p\n", (void *)mode);
+    LOG_VERBOSE("Destroying cplib_mode_base_t %p\n", (void *) mode);
 
     mode->post_cipher_transform = NULL;
     mode->pre_cipher_transform = NULL;
@@ -316,7 +378,7 @@ cplib_mode_new(cplib_mode_pre_transform_f pre_transform, cplib_mode_post_transfo
 // ------------------------------------------------------------------------
 
 int cplib_cipher_provider_base_destroy(cplib_cipher_provider_base_t *provider) {
-    LOG_VERBOSE("Destroying cplib_cipher_provider_base_t %p\n", (void *)provider);
+    LOG_VERBOSE("Destroying cplib_cipher_provider_base_t %p\n", (void *) provider);
 
     provider->destroy = NULL;
     provider->next = NULL;

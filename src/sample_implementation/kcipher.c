@@ -185,7 +185,7 @@ int kcipher_key_provider_initialize(cplib_keyed_key_provider_t *self, cplib_mem_
     return CPLIB_ERR_SUCCESS;
 }
 
-cplib_key_provider_base_t *cipher_allocate_key_provider(void) {
+cplib_key_provider_base_t *cipher_allocate_key_provider(cplib_key_provider_factory_base_t * self) {
     cplib_key_provider_base_t *key_provider = (cplib_key_provider_base_t *) cplib_keyed_key_provider_new3();
     if (!key_provider) {
         return NULL;
