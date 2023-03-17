@@ -36,6 +36,19 @@ int cplib_destroy_chunk(cplib_mem_chunk_t *chunk) {
     return CPLIB_ERR_SUCCESS;
 }
 
+int cplib_mem_chunk_append(struct cplib_mem_chunk_t *self, void *data, size_t size) {
+    if (self->size - self->taken < size) {
+        return CPLIB_ERR_ARG;
+    }
+
+    memcpy(((uint8_t*)self->mem) + self->taken, data, size);
+
+    self->taken += size;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+
 cplib_mem_chunk_t *cplib_create_chunk(size_t size) {
     cplib_mem_chunk_t *chunk = (cplib_mem_chunk_t *) cplib_destroyable_new(sizeof(cplib_mem_chunk_t));
     if (!chunk) {
@@ -47,6 +60,7 @@ cplib_mem_chunk_t *cplib_create_chunk(size_t size) {
     chunk->taken = 0;
     chunk->recycle = cplib_mem_chunk_recycle;
     chunk->destroy = (cplib_independent_mutator_f) cplib_destroy_chunk;
+    chunk->append = cplib_mem_chunk_append;
 
     allocated_chunks++;
     LOG_VERBOSE("Created cplib_mem_chunk_t %p with mem size %zu\n", (void *) chunk, chunk->size);
@@ -172,7 +186,11 @@ int cplib_destroyable_put(void *destroyable_ptr) {
 
     if (destroyable->ref_count == 0) {
         LOG_MEM("Destroyable reached ref_count == 0: %p\n", (void *) destroyable);
-        if (!destroyable->destroy || destroyable->destroy == (cplib_independent_mutator_f) cplib_destroyable_put) {
+        if (!destroyable->destroy) {
+            return CPLIB_ERR_SUCCESS;
+        }
+
+        if (destroyable->destroy == (cplib_independent_mutator_f) cplib_destroyable_put) {
             cplib_destroyable_destroy(destroyable);
             return CPLIB_MEM_DESTROY;
         }
@@ -199,6 +217,6 @@ int cplib_destroyable_hold(void *destroyable_ptr) {
 cplib_destroyable_t *cplib_destroyable_new(size_t size) {
     cplib_destroyable_t *destroyable = (cplib_destroyable_t *) cplib_malloc(size);
     destroyable->ref_count = 1;
-    destroyable->destroy = (cplib_independent_mutator_f) cplib_destroyable_put;
+    destroyable->destroy = (cplib_independent_mutator_f) cplib_destroyable_destroy;
     return destroyable;
 }

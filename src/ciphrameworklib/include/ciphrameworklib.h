@@ -56,12 +56,15 @@ enum cplib_proc_type {
     CPLIB_PROC_DECRYPT
 };
 
-#define CPLIB_CLOSED_FD (-2)
+
+#define CPLIB_INVALID_FD (-2)
+#define CPLIB_BYTE_MASK_L 0xf0
+#define CPLIB_BYTE_MASK_R 0x0f
+#define CPLIB_UNUSED_PARAM(param) (void)(param)
+
 
 // ------------------------------------------------------------------------
 struct cplib_cipher_base_t;
-
-#define CPLIB_UNUSED_PARAM(param) (void)(param)
 
 
 /**
@@ -260,7 +263,7 @@ int cplib_round_key_provider_next_reverse(cplib_round_key_provider_base_t *self,
 
 struct cplib_key_provider_factory_base_t;
 
-typedef cplib_key_provider_base_t *(*cplib_key_provider_allocator_f)(struct cplib_key_provider_factory_base_t * self);
+typedef cplib_key_provider_base_t *(*cplib_key_provider_allocator_f)(struct cplib_key_provider_factory_base_t *self);
 
 typedef cplib_key_provider_base_t *(*cplib_key_provider_from_chunk_f)(struct cplib_key_provider_factory_base_t *self,
                                                                       cplib_mem_chunk_t *chunk);
@@ -269,7 +272,7 @@ struct cplib_key_provider_factory_base_t {
     cplib_destroyable_t;
     cplib_key_provider_allocator_f allocate;
     cplib_key_provider_from_chunk_f from;
-    cplib_destroyable_t * context;
+    cplib_destroyable_t *context;
 };
 
 typedef struct cplib_key_provider_factory_base_t cplib_key_provider_factory_base_t;
@@ -391,29 +394,5 @@ cplib_cipher_driver_t *cplib_cipher_driver_new(void);
 int cplib_cipher_driver_base_destroy(cplib_cipher_driver_t *cipher_driver);
 
 // ------------------------------------------------------------------------
-
-//#define CPLIB_BYTE_MASK_1000_0000 0b10000000
-//#define CPLIB_BYTE_MASK_1100_0000 0b11000000
-//#define CPLIB_BYTE_MASK_1110_0000 0b11100000
-//#define CPLIB_BYTE_MASK_1111_0000 0b11110000
-//#define CPLIB_BYTE_MASK_1111_1000 0b11111000
-//#define CPLIB_BYTE_MASK_1111_1100 0b11111100
-//#define CPLIB_BYTE_MASK_1111_1110 0b11111110
-//#define CPLIB_BYTE_MASK_1111_1111 0b11111111
-//#define CPLIB_BYTE_MASK_0111_1111 0b01111111
-//#define CPLIB_BYTE_MASK_0011_1111 0b00111111
-//#define CPLIB_BYTE_MASK_0001_1111 0b00011111
-//#define CPLIB_BYTE_MASK_0000_1111 0b00001111
-//#define CPLIB_BYTE_MASK_0000_0111 0b00000111
-//#define CPLIB_BYTE_MASK_0000_0011 0b00000011
-//#define CPLIB_BYTE_MASK_0000_0001 0b00000001
-
-#define CPLIB_BYTE_MASK_L 0xf0
-#define CPLIB_BYTE_MASK_R 0x0f
-
-typedef struct cplib_byte_mask_t {
-    uint8_t left;
-    uint8_t right;
-} cplib_byte_mask_t;
 
 #endif //SOURCES_CIPHRAMEWORKLIB_H

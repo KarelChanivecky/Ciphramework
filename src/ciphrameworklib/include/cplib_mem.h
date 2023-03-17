@@ -34,12 +34,15 @@ cplib_destroyable_t *cplib_destroyable_new(size_t size);
 
 int cplib_destroyable_destroy(struct cplib_destroyable_t *destroyable);
 
+typedef int (*cplib_mem_chunk_append_f)(struct cplib_mem_chunk_t *self, const void *data, size_t size);
+
 struct cplib_mem_chunk_t {
     cplib_destroyable_t;
     void *mem;
     size_t size;
     size_t taken;
     cplib_mem_chunk_recycle_f recycle;
+    cplib_mem_chunk_append_f append;
 };
 
 typedef struct cplib_mem_chunk_t cplib_mem_chunk_t;

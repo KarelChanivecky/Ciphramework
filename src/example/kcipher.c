@@ -3,10 +3,7 @@
  */
 
 
-#ifdef KCRYPT_KCIPHER_CIPHER
-
-#include "kcipher.h"
-#include "xor_cipher.h"
+#include "kcrypt.h"
 #include "cplib_utils.h"
 #include "cplib_log.h"
 
@@ -185,7 +182,7 @@ int kcipher_key_provider_initialize(cplib_keyed_key_provider_t *self, cplib_mem_
     return CPLIB_ERR_SUCCESS;
 }
 
-cplib_key_provider_base_t *cipher_allocate_key_provider(cplib_key_provider_factory_base_t * self) {
+cplib_key_provider_base_t *kcipher_allocate_key_provider(cplib_key_provider_factory_base_t *self) {
     cplib_key_provider_base_t *key_provider = (cplib_key_provider_base_t *) cplib_keyed_key_provider_new3();
     if (!key_provider) {
         return NULL;
@@ -197,12 +194,47 @@ cplib_key_provider_base_t *cipher_allocate_key_provider(cplib_key_provider_facto
 }
 
 cplib_key_provider_factory_base_t *cipher_get_key_provider_factory(void) {
-    return cplib_key_provider_factory_new(cipher_allocate_key_provider);
+    return cplib_key_provider_factory_new(kcipher_allocate_key_provider);
+}
+
+int kcipher_get_suite(
+        enum cplib_proc_type proc_type,
+        int argc,
+        const char **argv,
+        cplib_cipher_factory_base_t **cipher_factory,
+        cplib_key_provider_factory_base_t **key_provider_factory,
+        cplib_block_padder_base_t ** padder) {
+
+    return CPLIB_ERR_SUCCESS;
 }
 
 
-size_t cipher_block_to_key_ratio(void) {
-    return 2;
+size_t supported_key_sizes[] = {32};
+
+char *supported_modes[] = {
+        KCRYPT_MODE_ECB,
+        KCRYPT_MODE_CBC,
+        KCRYPT_MODE_CTR,
+        KCRYPT_MODE_OFB,
+        KCRYPT_MODE_CFB
+};
+
+int kcipher_module_destroy(kcrypt_shared_module_api_t * cipher_module) {
+    return CPLIB_ERR_SUCCESS;
 }
 
-#endif // KCRYPT_KCIPHER_CIPHER
+static const char * HELP = "\n";
+
+void get_help(const char ** help_text) {
+    *help_text = HELP;
+}
+
+int kcrypt_init_cipher_module_api(kcrypt_shared_module_api_t * cipher_module) {
+    cipher_module->get_suite = kcipher_get_suite;
+    cipher_module->supported_modes = supported_modes;
+    cipher_module->supported_key_sizes = supported_key_sizes;
+    cipher_module->block_to_key_size_ratio = 2;
+    cipher_module->help_text = HELP;
+    cipher_module->destroy = (cplib_independent_mutator_f) kcipher_module_destroy;
+    return CPLIB_ERR_SUCCESS;
+}

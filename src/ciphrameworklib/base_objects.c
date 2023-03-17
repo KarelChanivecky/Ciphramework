@@ -237,7 +237,20 @@ cplib_key_provider_base_t *cplib_key_provider_new(cplib_next_item_f next) {
 // ------------------------------------------------------------------------
 
 int cplib_round_key_provider_base_destroy(cplib_round_key_provider_base_t *round_key_provider) {
+    round_key_provider->round_index = 0;
+    round_key_provider->initialize = NULL;
+    round_key_provider->destroy = NULL;
+    round_key_provider->next = NULL;
+    if (round_key_provider->round_keys) {
+        for (unsigned int i = 0; i < round_key_provider->round_keys_count; i++) {
+            CPLIB_PUT_IF_EXISTS(round_key_provider->round_keys[i]);
+        }
+        cplib_free(round_key_provider->round_keys);
+    }
 
+    round_key_provider->round_keys_count = 0;
+    cplib_free(round_key_provider);
+    return CPLIB_ERR_SUCCESS;
 }
 
 cplib_round_key_provider_base_t *cplib_round_key_provider_base_new(size_t struct_size,

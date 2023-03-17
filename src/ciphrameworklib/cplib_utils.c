@@ -756,7 +756,7 @@ int file_writer_flush(cplib_file_writer_t *self) {
 int file_writer_write(cplib_file_writer_t *self, cplib_mem_chunk_t *data) {
     ssize_t ret;
 
-    if (self->fd == CPLIB_CLOSED_FD) {
+    if (self->fd == CPLIB_INVALID_FD) {
         return CPLIB_ERR_FILE;
     }
 
@@ -780,12 +780,12 @@ int file_writer_write(cplib_file_writer_t *self, cplib_mem_chunk_t *data) {
 
 int file_writer_close(cplib_file_writer_t *self) {
     int ret;
-    if (self->fd != CPLIB_CLOSED_FD) {
+    if (self->fd != CPLIB_INVALID_FD) {
         return CPLIB_ERR_SUCCESS;
     }
 
     ret = close(self->fd);
-    self->fd = CPLIB_CLOSED_FD;
+    self->fd = CPLIB_INVALID_FD;
 
     if (ret == -1) {
         LOG_MSG("Failed to close file due to error: %s\n", strerror(errno));
@@ -924,9 +924,9 @@ typedef struct file_block_iterator_context_t file_block_iterator_context_t;
 int destroy_file_block_iterator_context(file_block_iterator_context_t *ctx) {
     LOG_VERBOSE("Destroying file_block_iterator_context_t %p\n", (void *) ctx);
 
-    if (ctx->fd != CPLIB_CLOSED_FD) {
+    if (ctx->fd != CPLIB_INVALID_FD) {
         close(ctx->fd);
-        ctx->fd = CPLIB_CLOSED_FD;
+        ctx->fd = CPLIB_INVALID_FD;
     }
     ctx->got_eof = 0;
     CPLIB_PUT_IF_EXISTS(ctx->allocated_iterator);

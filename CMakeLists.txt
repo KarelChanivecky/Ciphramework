@@ -3,6 +3,14 @@ project(Sources C)
 
 set(CMAKE_C_STANDARD 17)
 
+include(FetchContent)
+FetchContent_Declare(
+        dc_utils
+        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
+        GIT_TAG main
+)
+FetchContent_MakeAvailable(dc_utils)
+
 set(CPLIB_BUILD_TYPE ${BUILD_TYPE})
 message("BUILD_TYPE:  ${BUILD_TYPE}")
 if (NOT CPLIB_BUILD_TYPE)
@@ -15,11 +23,11 @@ message("CPLIB_BUILD_TYPE: ${BUILD_TYPE_COMPILER_FLAG}")
 
 include_directories(
         ./src/ciphrameworklib/include
-        ./src/sample_implementation/include
+        src/example/include
 )
 
 add_library(
-        ciphramework STATIC
+        ciphramework SHARED
         src/ciphrameworklib/cplib_mem.c
         src/ciphrameworklib/base_objects.c
         src/ciphrameworklib/cplib_utils.c
@@ -28,13 +36,27 @@ add_library(
 
 target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
-add_executable(
-        kcrypt
-        src/sample_implementation/main.c
-        src/sample_implementation/xor_cipher.c
-        src/sample_implementation/kcipher.c
+add_library(
+        kcipher SHARED
+        src/example/kcipher.c
 )
 
-target_link_libraries(kcrypt ciphramework)
+target_compile_options(kcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
-target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE} -DKCRYPT_KCIPHER_CIPHER)
+add_library(
+        xorcipher SHARED
+        src/example/xor_cipher.c
+)
+
+target_compile_options(xorcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+
+add_executable(
+        kcrypt
+        src/example/main.c
+        src/example/kcrypt_utils.c
+)
+
+
+target_link_libraries(kcrypt ciphramework dc_utils)
+
+target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
