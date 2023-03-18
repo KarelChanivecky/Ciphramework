@@ -19,7 +19,6 @@
 
 #define KCRYPT_LIB_MODULE_INIT_FUNCTION_NAME "kcrypt_lib_init"
 
-typedef void (*kcrypt_get_help_func_t)(char **help_text);
 
 struct kcrypt_shared_module_api_t {
     cplib_destroyable_t;
@@ -33,6 +32,7 @@ typedef struct kcrypt_shared_module_api_t kcrypt_shared_module_api_t;
 typedef int (*kcrypt_get_cipher_f)(
         int argc,
         const char **argv,
+        enum cplib_proc_type process,
         cplib_cipher_factory_base_t **cipher_factory,
         cplib_key_provider_base_t **key_provider);
 
@@ -54,6 +54,7 @@ typedef size_t (*kcrypt_get_output_key_size_f)(size_t input_key_size);
 
 typedef int (*kcrypt_get_mode_f)(int argc,
                                  const char **argv,
+                                 enum cplib_proc_type process,
                                  cplib_mode_base_t **mode,
                                  cplib_block_padder_base_t **padder);
 

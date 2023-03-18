@@ -36,20 +36,32 @@ add_library(
 
 target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
+# CIPHERS
 add_library(
         kcipher SHARED
-        src/example/kcipher.c
+        src/example/ciphers/kcipher.c
 )
 
 target_compile_options(kcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
 add_library(
         xorcipher SHARED
-        src/example/xor_cipher.c
+        src/example/ciphers/xor_cipher.c
 )
 
 target_compile_options(xorcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
+# MODES
+
+add_library(
+        ECB SHARED
+        src/example/modes/ECB.c
+)
+
+target_compile_options(ECB PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+
+
+# KCRYPT
 add_executable(
         kcrypt
         src/example/main.c

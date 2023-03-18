@@ -13,6 +13,7 @@
 
 
 struct arg_options_t {
+    enum cplib_proc_type process;
     char *cipher;
     char *mode;
     char *key;
@@ -401,9 +402,10 @@ void set_module_args(void) {
 int validate_key_size(void) {
     kcrypt_context_t *ctx = &kcrypt_context;
 
-    if (!kcrypt_match_sizes(ctx->input_key_size,
-                            ctx->mode_module_api.supported_key_sizes,
-                            ctx->mode_module_api.supported_key_sizes_count)) {
+    if (ctx->mode_module_api.supported_key_sizes[0] != KCRYPT_ANY_KEY_SIZE
+        && !kcrypt_match_sizes(ctx->input_key_size,
+                               ctx->mode_module_api.supported_key_sizes,
+                               ctx->mode_module_api.supported_key_sizes_count)) {
         LOG_MSG("Mode does not support given key size\n"
                 "Mode usage: %s\n", ctx->mode_module_api.help_text);
         return CPLIB_ERR_KEY_SIZE;
@@ -516,6 +518,7 @@ int process_parsed_args(void) {
 
     ret = kcrypt_context.cipher_module_api.get_cipher(kcrypt_context.cipher_argc,
                                                       (const char **) kcrypt_context.cipher_argv,
+                                                      options.process,
                                                       &kcrypt_context.cipher_factory,
                                                       &kcrypt_context.key_provider);
     if (ret != CPLIB_ERR_SUCCESS) {
@@ -528,6 +531,7 @@ int process_parsed_args(void) {
 
     ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
                                                   (const char **) kcrypt_context.mode_argv,
+                                                  options.process,
                                                   &kcrypt_context.mode,
                                                   &kcrypt_context.padder);
     if (ret != CPLIB_ERR_SUCCESS) {
@@ -603,7 +607,7 @@ int parse_args(int argc, char **argv) {
 
     options.cipher = argv[1];
 
-    while ((opt = getopt(argc, argv, "k:l:o:f:m:c:d:")) != -1) {
+    while ((opt = getopt(argc, argv, "p:k:l:o:f:m:c:d:")) != -1) {
         switch (opt) {
             case 'd':
                 options.mode = optarg;
@@ -633,9 +637,6 @@ int parse_args(int argc, char **argv) {
                 }
                 options.key_path = optarg;
                 break;
-            case 'o':
-                options.output_path = optarg;
-                break;
             case 'm':
                 if (options.input_path) {
                     LOG_MSG("Provide either -f, -m or neither\n");
@@ -644,6 +645,24 @@ int parse_args(int argc, char **argv) {
                 }
                 options.message = optarg;
                 break;
+            case 'o':
+                options.output_path = optarg;
+                break;
+            case 'p':
+                if (options.process != CPLIB_PROC_NONE) {
+                    LOG_MSG("Must provide -p only once\n");
+                    print_usage();
+                    return CPLIB_ERR_ARG;
+                }
+
+                if (optarg[0] == 'd') {
+                    options.process = CPLIB_PROC_DECRYPT;
+                } else if (optarg[0] == 'e') {
+                    options.process = CPLIB_PROC_ENCRYPT;
+                } else {
+                    LOG_MSG("Invalid process type\n");
+                    print_usage();
+                }
             default:
                 LOG_MSG("Unknown arg: %c\n", opt);
                 print_usage();
