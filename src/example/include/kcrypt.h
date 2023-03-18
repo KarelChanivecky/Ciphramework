@@ -14,8 +14,6 @@
     #define KCRYPT_FILE_BUFFER_SIZE 30000000 // 10MB
 #endif
 
-#define KCRYPT_ANY_KEY_SIZE 0
-#define KCRYPT_ANY_KEY_SIZE_STR "ANY"
 
 #define KCRYPT_LIB_MODULE_INIT_FUNCTION_NAME "kcrypt_lib_init"
 
@@ -70,12 +68,18 @@ typedef struct kcrypt_mode_module_api_t kcrypt_mode_module_api_t;
 
 typedef int(*kcrypt_lib_api_init_f)(void *lib_api);
 
+// Matches any mode. Place at the start of supported modes.
+#define KCRYPT_MODE_ANY "ANY"
 // common modes
 #define KCRYPT_MODE_ECB "ECB"
 #define KCRYPT_MODE_CBC "CBC"
 #define KCRYPT_MODE_CTR "CTR"
 #define KCRYPT_MODE_OFB "OFB"
 #define KCRYPT_MODE_CFB "CFB"
+
+// Matches any key size. Place at the start of supported key sizes.
+#define KCRYPT_ANY_KEY_SIZE 0
+#define KCRYPT_ANY_KEY_SIZE_STR "0 (Any size)"
 
 #define KCRYPT_CLI_MODE_ARGS_HEADER "MODE"
 #define KCRYPT_CLI_CIPHER_ARGS_HEADER "CIPHER"

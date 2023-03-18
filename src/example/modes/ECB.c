@@ -34,7 +34,7 @@ int ECB_get_mode(int argc,
 }
 
 static size_t supported_key_sizes[] = {KCRYPT_ANY_KEY_SIZE};
-static const char * help_text = "Usage: -- " KCRYPT_MODE_ECB;
+static const char * help_text = "Usage: -- " KCRYPT_MODE_ECB "\nSupported key sizes: [" KCRYPT_ANY_KEY_SIZE_STR "]";
 
 int ECB_destroy(void * unused) {
     CPLIB_UNUSED_PARAM(unused);

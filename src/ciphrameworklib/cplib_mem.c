@@ -60,7 +60,7 @@ cplib_mem_chunk_t *cplib_create_chunk(size_t size) {
     chunk->taken = 0;
     chunk->recycle = cplib_mem_chunk_recycle;
     chunk->destroy = (cplib_independent_mutator_f) cplib_destroy_chunk;
-    chunk->append = cplib_mem_chunk_append;
+    chunk->append = (cplib_mem_chunk_append_f) cplib_mem_chunk_append;
 
     allocated_chunks++;
     LOG_VERBOSE("Created cplib_mem_chunk_t %p with mem size %zu\n", (void *) chunk, chunk->size);

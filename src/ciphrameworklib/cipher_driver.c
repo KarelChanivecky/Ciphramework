@@ -46,7 +46,6 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     writer = self->writer;
 
 
-
     while (!empty) {
 
         ret = block_iterator->next(block_iterator, (void **) &block);
@@ -76,7 +75,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
 
 
             ret = block_iterator->is_empty(block_iterator, &empty);
-            if (ret!= CPLIB_ERR_SUCCESS) {
+            if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
                 goto cleanup;
             }
@@ -140,7 +139,6 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 }
                 LOG_VERBOSE("Post-modded\n");
             }
-
 
 
             CPLIB_PUT_IF_EXISTS(pre_modded);

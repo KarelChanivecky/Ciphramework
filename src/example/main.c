@@ -234,6 +234,10 @@ int validate_mode_selection(const char *chosen_mode, char **accepted_modes, unsi
     size_t chosen_mode_len;
     cplib_mem_chunk_t *augmented_chosen_mode;
 
+    if (strncmp(KCRYPT_MODE_ANY, accepted_modes[0], strlen(KCRYPT_MODE_ANY)) == 0) {
+        return CPLIB_ERR_SUCCESS;
+    }
+
     chosen_mode_len = strlen(chosen_mode);
     augmented_chosen_mode = cplib_allocate_mem_chunk(chosen_mode_len + 2);
     if (augmented_chosen_mode == NULL) {
@@ -526,6 +530,12 @@ int process_parsed_args(void) {
         if (ret == CPLIB_ERR_ARG) {
             print_lib_usage(KCRYPT_CIPHER_LIB_DIR, options.cipher);
         }
+        goto error_cleanup;
+    }
+
+    ret = kcrypt_context.key_provider->initialize(kcrypt_context.key_provider, kcrypt_context.key);
+    if (ret!= CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to initialize key provider\n");
         goto error_cleanup;
     }
 
