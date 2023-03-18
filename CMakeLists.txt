@@ -3,13 +3,13 @@ project(Sources C)
 
 set(CMAKE_C_STANDARD 17)
 
-include(FetchContent)
-FetchContent_Declare(
-        dc_utils
-        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
-        GIT_TAG main
-)
-FetchContent_MakeAvailable(dc_utils)
+#include(FetchContent)
+#FetchContent_Declare(
+#        dc_utils
+#        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
+#        GIT_TAG main
+#)
+#FetchContent_MakeAvailable(dc_utils)
 
 set(CPLIB_BUILD_TYPE ${BUILD_TYPE})
 message("BUILD_TYPE:  ${BUILD_TYPE}")
@@ -36,22 +36,28 @@ add_library(
 
 target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
+set(CMAKE_SHARED_LIBRARY_PREFIX "")
 # CIPHERS
-add_library(
-        kcipher SHARED
-        src/example/ciphers/kcipher.c
-)
-
-target_compile_options(kcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/ciphers)
 
 add_library(
-        xorcipher SHARED
-        src/example/ciphers/xor_cipher.c
+        feisty SHARED
+        src/example/ciphers/feisty.c
 )
 
-target_compile_options(xorcipher PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_compile_options(feisty PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(feisty ciphramework)
+
+add_library(
+        xor SHARED
+        src/example/ciphers/xor.c
+)
+
+target_compile_options(xor PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(xor ciphramework)
 
 # MODES
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/modes)
 
 add_library(
         ECB SHARED
@@ -59,6 +65,7 @@ add_library(
 )
 
 target_compile_options(ECB PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(ECB ciphramework)
 
 
 # KCRYPT
@@ -69,6 +76,6 @@ add_executable(
 )
 
 
-target_link_libraries(kcrypt ciphramework dc_utils)
+target_link_libraries(kcrypt ciphramework dc_utils dl)
 
 target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})

@@ -181,13 +181,18 @@ int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_si
 void print_usage(void) {
     fprintf(stderr,
             "Usage:\n"
-            "%s [-k <key> | -l <key file>] [-o <output file>] [-f <input file> | -m <message>] [-- MODE <mode options>] [-- CIPHER <cipher options> ]\n"
+            "%s <cipher> <-p d | -p e> [-k <key> | -l <key file>] [-o <output file>] [-f <input file> | -m <message>] [-- MODE <mode options>] [-- CIPHER <cipher options> ]\n"
+            "-p e for encryption\n"
+            "-p d for encryption\n"
             "if -o is not provided writes to stdout\n"
             "if -f or -m is not provided reads message from stdin\n"
             "\n"
             "%s help <cipher | mode>\n"
             "list available ciphers or modes\n"
-            "%s help < cipher <cipher name> | mode <mode name> >\n", exe_name, exe_name, exe_name);
+            "%s help < cipher <cipher name> | mode <mode name> >\n"
+            "Not all ciphers or modes need options. But for those that do, pass the options after the main options by\n"
+            "adding '-- CIPHER' or '--MODE' respectively, following, add the options.\n",
+            exe_name, exe_name, exe_name);
 }
 
 int print_available_libs(char *lib_type_name) {
@@ -534,7 +539,7 @@ int process_parsed_args(void) {
     }
 
     ret = kcrypt_context.key_provider->initialize(kcrypt_context.key_provider, kcrypt_context.key);
-    if (ret!= CPLIB_ERR_SUCCESS) {
+    if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to initialize key provider\n");
         goto error_cleanup;
     }
@@ -673,6 +678,7 @@ int parse_args(int argc, char **argv) {
                     LOG_MSG("Invalid process type\n");
                     print_usage();
                 }
+                break;
             default:
                 LOG_MSG("Unknown arg: %c\n", opt);
                 print_usage();
@@ -682,13 +688,15 @@ int parse_args(int argc, char **argv) {
     }
 
     LOG_DEBUG("Arguments parsed:"
+              "options->process: %d\n"
               "options->cipher: %s\n"
               "options->input_path: %s\n"
               "options->key_path: %s\n"
               "options->key: %s\n"
               "options->output_path: %s\n"
               "options->message: %s\n"
-              "options->mode %s\n",
+              "options->mode: %s\n",
+              options.process,
               options.cipher,
               options.input_path,
               options.key_path,

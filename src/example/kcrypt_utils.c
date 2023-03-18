@@ -21,7 +21,7 @@ int kcrypt_get_available_shared_libs(char *dirname, cplib_mem_chunk_t ***lib_nam
     cplib_mem_chunk_t *lib;
     int ret;
 
-    LOG_DEBUG("Getting available shared libraries in dir_pointer: %s\n", dirname);
+    LOG_DEBUG("Getting available shared libraries in: %s\n", dirname);
 
     lib_name_list = dlinked_create_list();
     if (lib_name_list == NULL) {
@@ -74,6 +74,8 @@ int kcrypt_get_available_shared_libs(char *dirname, cplib_mem_chunk_t ***lib_nam
     } else {
         ret = SUCCESS;
     }
+
+    *lib_count = lib_name_list->size;
 
     dlinked_free_list(&lib_name_list);
     return ret;

@@ -256,8 +256,9 @@ int cplib_round_key_provider_base_destroy(cplib_round_key_provider_base_t *round
 cplib_round_key_provider_base_t *cplib_round_key_provider_base_new(size_t struct_size,
                                                                    cplib_mem_chunk_func initialize,
                                                                    cplib_next_item_f next) {
+
     cplib_round_key_provider_base_t *key_provider = (cplib_round_key_provider_base_t *) cplib_key_provider_base_new(
-            sizeof(cplib_round_key_provider_base_t), next);
+            struct_size, next);
     if (!key_provider) {
         LOG_DEBUG("Cannot allocate round_key_provider. Out of memory\n");
         return NULL;
