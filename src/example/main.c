@@ -13,7 +13,6 @@
 
 
 struct arg_options_t {
-    char *exe_name;
     char *cipher;
     char *mode;
     char *key;
@@ -27,18 +26,20 @@ struct arg_options_t {
 
 typedef struct arg_options_t arg_options_t;
 
+
 struct kcrypt_context_t {
     size_t input_key_size;
     size_t effective_key_size;
     cplib_mem_chunk_t *key;
     cplib_writer_base_t *writer;
-    cplib_cipher_base_t *cipher;
+    cplib_key_provider_base_t *key_provider;
+    cplib_cipher_factory_base_t *cipher_factory;
     cplib_block_padder_base_t *padder;
     cplib_block_iterator_base_t *block_iterator;
     size_t block_size;
     cplib_mode_base_t *mode;
-    kcrypt_cipher_module_api_t *cipher_module_api;
-    kcrypt_mode_module_api_t *mode_module_api;
+    kcrypt_cipher_module_api_t cipher_module_api;
+    kcrypt_mode_module_api_t mode_module_api;
     void *cipher_lib_handle;
     void *mode_lib_handle;
     int cipher_argc;
@@ -53,33 +54,22 @@ static arg_options_t options = {0};
 static kcrypt_context_t kcrypt_context = {0};
 static char *exe_name = NULL;
 
-int run_kcrypt(
-        cplib_mem_chunk_t *key,
-        cplib_key_provider_factory_base_t *key_provider_factory,
-        cplib_block_iterator_base_t *block_iterator,
-        cplib_writer_base_t *writer,
-        cplib_mode_base_t *mode,
-        cplib_cipher_base_t *cipher,
-        cplib_block_padder_base_t *block_padder
-) {
+void init_options(void) {
+    options.cipher = NULL;
+    options.mode = KCRYPT_MODE_ECB;
+    options.key = NULL;
+    options.key_path = NULL;
+    options.output_path = NULL;
+    options.input_path = NULL;
+    options.message = NULL;
+    options.remaining_argc = 0;
+    options.remaining_argv = NULL;
+}
+
+
+int run_kcrypt(void) {
     int ret;
     cplib_cipher_driver_t *cipher_driver = NULL;
-    cplib_cipher_factory_base_t *cipher_factory = NULL;
-    cplib_key_provider_base_t *key_provider = NULL;
-
-
-    ret = key_provider->initialize(key_provider, key);
-    if (ret != CPLIB_ERR_SUCCESS) {
-        LOG_MSG("Failed to initialize key provider\n");
-        goto cleanup;
-    }
-
-    cipher_factory = cipher_get_cipher_factory(process);
-    if (!cipher_factory) {
-        LOG_MSG("Failed to create cipher factory\n");
-        ret = CPLIB_ERR_MEM;
-        goto cleanup;
-    }
 
     cipher_driver = cplib_cipher_driver_new();
     if (!cipher_driver) {
@@ -88,25 +78,26 @@ int run_kcrypt(
         goto cleanup;
     }
 
-    CPLIB_HOLD_IF_EXISTS(cipher_factory);
-    CPLIB_HOLD_IF_EXISTS(key_provider);
+    CPLIB_HOLD_IF_EXISTS(kcrypt_context.cipher_factory);
+    CPLIB_HOLD_IF_EXISTS(kcrypt_context.key_provider);
 
 
-    cipher_driver->writer = writer;
-    cipher_driver->cipher_factory = cipher_factory;
-    cipher_driver->key_provider = key_provider;
-    cipher_driver->block_padder = block_padder;
-    cipher_driver->block_iterator = block_iterator;
-    cipher_driver->mode = mode;
-    cipher_driver->block_size = key->taken * cipher_block_to_key_ratio();
+    cipher_driver->writer = kcrypt_context.writer;
+    cipher_driver->cipher_factory = kcrypt_context.cipher_factory;
+    cipher_driver->key_provider = kcrypt_context.key_provider;
+    cipher_driver->block_padder = kcrypt_context.padder;
+    cipher_driver->block_iterator = kcrypt_context.block_iterator;
+    cipher_driver->mode = kcrypt_context.mode;
+    cipher_driver->block_size = kcrypt_context.block_size;
 
-    cipher_driver->run(cipher_driver);
+    ret = cipher_driver->run(cipher_driver);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to process message\n");
+    }
 
     cleanup:
 
     CPLIB_PUT_IF_EXISTS(cipher_driver);
-    CPLIB_PUT_IF_EXISTS(key_provider);
-    CPLIB_PUT_IF_EXISTS(cipher_factory);
 
     return ret;
 }
@@ -151,10 +142,6 @@ int get_key(char *key_path, cplib_mem_chunk_t **key) {
     return CPLIB_ERR_SUCCESS;
 }
 
-int init_key(arg_options_t *options) {
-
-}
-
 int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_size,
                        cplib_block_iterator_base_t **block_iterator) {
     size_t buffer_size;
@@ -190,7 +177,7 @@ int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_si
 }
 
 
-void print_usage(char *exe_name) {
+void print_usage(void) {
     fprintf(stderr,
             "Usage:\n"
             "%s [-k <key> | -l <key file>] [-o <output file>] [-f <input file> | -m <message>] [-- MODE <mode options>] [-- CIPHER <cipher options> ]\n"
@@ -267,7 +254,7 @@ int validate_mode_selection(const char *chosen_mode, char **accepted_modes, unsi
 }
 
 int print_lib_usage(char *lib_type, char *lib_name) {
-    void *lib_handle;
+    void *lib_handle = NULL;
     size_t lib_name_len;
     size_t full_lib_name_len;
     size_t lib_path_len;
@@ -352,25 +339,33 @@ int load_apis(void) {
 
     ret = get_module(KCRYPT_CIPHER_LIB_DIR,
                      options.cipher,
-                     (kcrypt_shared_module_api_t *) ctx->cipher_module_api);
+                     (kcrypt_shared_module_api_t *) &ctx->cipher_module_api);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to get cipher module %s\n", options.cipher);
         return ret;
     }
 
-    if (ctx->cipher_module_api->mandatory_mode) {
+    if (ctx->cipher_module_api.mandatory_mode) {
         if (options.mode
             &&
-            strncmp(ctx->cipher_module_api->mandatory_mode,
+            strncmp(ctx->cipher_module_api.mandatory_mode,
                     options.mode,
-                    strlen(ctx->cipher_module_api->mandatory_mode)) != 0) {
+                    strlen(ctx->cipher_module_api.mandatory_mode)) != 0) {
             LOG_MSG("Mode %s specified, but chosen cipher mandates a different mode %s."
-                    " Not allowed to choose mode\n", options.mode, ctx->cipher_module_api->mandatory_mode);
+                    " Not allowed to choose mode\n", options.mode, ctx->cipher_module_api.mandatory_mode);
             return CPLIB_ERR_ARG;
         }
 
         LOG_DEBUG("Using mode mandated by cipher: %s\n", options.mode);
-        options.mode = ctx->cipher_module_api->mandatory_mode;
+        options.mode = ctx->cipher_module_api.mandatory_mode;
+    }
+
+    ret = validate_mode_selection(options.mode,
+                                  (char **) ctx->cipher_module_api.supported_modes,
+                                  ctx->cipher_module_api.supported_mode_count);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Chosen mode %s is not supported\n", options.mode);
+        return ret;
     }
 
     ctx->input_key_size = ctx->key->taken;
@@ -378,7 +373,7 @@ int load_apis(void) {
 
     ret = get_module(KCRYPT_MODE_LIB_DIR,
                      options.mode,
-                     (kcrypt_shared_module_api_t *) ctx->mode_module_api);
+                     (kcrypt_shared_module_api_t *) &ctx->mode_module_api);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to get mode module %s\n", options.mode);
         return ret;
@@ -404,24 +399,23 @@ void set_module_args(void) {
 
 
 int validate_key_size(void) {
-    int ret;
-
+    kcrypt_context_t *ctx = &kcrypt_context;
 
     if (!kcrypt_match_sizes(ctx->input_key_size,
-                            ctx->mode_module_api->supported_key_sizes,
-                            ctx->mode_module_api->supported_key_sizes_count)) {
+                            ctx->mode_module_api.supported_key_sizes,
+                            ctx->mode_module_api.supported_key_sizes_count)) {
         LOG_MSG("Mode does not support given key size\n"
-                "Mode usage: %s\n", ctx->mode_module_api->help_text);
+                "Mode usage: %s\n", ctx->mode_module_api.help_text);
         return CPLIB_ERR_KEY_SIZE;
     }
 
-    kcrypt_context.effective_key_size = ctx->mode_module_api->get_output_key_size(ctx->input_key_size);
+    kcrypt_context.effective_key_size = ctx->mode_module_api.get_output_key_size(ctx->input_key_size);
 
     LOG_DEBUG("Effective key size: %zu\n", ctx->effective_key_size);
 
     if (!kcrypt_match_sizes(ctx->effective_key_size,
-                            ctx->cipher_module_api->supported_key_sizes,
-                            ctx->cipher_module_api->supported_key_sizes_count)) {
+                            ctx->cipher_module_api.supported_key_sizes,
+                            ctx->cipher_module_api.supported_key_sizes_count)) {
         LOG_MSG("Cipher does not support the effective key size %zu. "
                 "The effective key size may be affected by the mode\n", ctx->effective_key_size);
         return CPLIB_ERR_KEY_SIZE;
@@ -431,10 +425,10 @@ int validate_key_size(void) {
 }
 
 int process_parsed_args(void) {
-    int ret = CPLIB_ERR_SUCCESS;
+    int ret;
     int input_fd = CPLIB_INVALID_FD;
     int output_fd = CPLIB_INVALID_FD;
-    size_t block_to_key_ratio = 0;
+    size_t block_to_key_ratio;
     cplib_mem_chunk_t *message = NULL;
 
     if (options.message) {
@@ -443,7 +437,7 @@ int process_parsed_args(void) {
     }
 
     if (!options.key_path && !options.key) {
-        print_usage(exe_name);
+        print_usage();
         ret = CPLIB_ERR_ARG;
         goto error_cleanup;
     }
@@ -507,19 +501,8 @@ int process_parsed_args(void) {
         input_fd = STDIN_FILENO;
     }
 
-    block_to_key_ratio = kcrypt_context.cipher_module_api->block_to_key_size_ratio;
+    block_to_key_ratio = kcrypt_context.cipher_module_api.block_to_key_size_ratio;
     kcrypt_context.block_size = block_to_key_ratio * kcrypt_context.effective_key_size;
-
-    // init cipher
-    if (!options.cipher) {
-
-    }
-
-    if (options.mode) {
-
-    }
-
-    // init mode
 
 
     ret = get_block_iterator(input_fd,
@@ -530,38 +513,45 @@ int process_parsed_args(void) {
         LOG_MSG("Failed to get block iterator. code: %d\n", ret);
         goto error_cleanup;
     }
-// TODO HERE!!!!!!!!
-    *padder = cplib_pkcs5_padder_new(*process);
-    if (!*padder) {
-        LOG_MSG("Failed to allocate padder\n");
-        ret = CPLIB_ERR_MEM;
+
+    ret = kcrypt_context.cipher_module_api.get_cipher(kcrypt_context.cipher_argc,
+                                                      (const char **) kcrypt_context.cipher_argv,
+                                                      &kcrypt_context.cipher_factory,
+                                                      &kcrypt_context.key_provider);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to initialize cipher\n");
+        if (ret == CPLIB_ERR_ARG) {
+            print_lib_usage(KCRYPT_CIPHER_LIB_DIR, options.cipher);
+        }
         goto error_cleanup;
     }
 
-    LOG_DEBUG("Arguments parsed successfully\n");
-    ret = CPLIB_ERR_SUCCESS;
+    ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
+                                                  (const char **) kcrypt_context.mode_argv,
+                                                  &kcrypt_context.mode,
+                                                  &kcrypt_context.padder);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to initialize mode\n");
+        if (ret == CPLIB_ERR_ARG) {
+            print_lib_usage(KCRYPT_MODE_LIB_DIR, options.mode);
+        }
+        goto error_cleanup;
+    }
+
+    LOG_DEBUG("Arguments processed successfully\n");
     return CPLIB_ERR_SUCCESS;
 
     error_cleanup:
-    CPLIB_PUT_IF_EXISTS(*key);
-    CPLIB_PUT_IF_EXISTS(*block_iterator);
-    CPLIB_PUT_IF_EXISTS(*writer);
-    CPLIB_PUT_IF_EXISTS(*mode);
-    CPLIB_PUT_IF_EXISTS(*padder);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.cipher_factory);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.key_provider);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.padder);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.mode);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.writer);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.block_iterator);
+    CPLIB_PUT_IF_EXISTS(kcrypt_context.key);
+    CPLIB_PUT_IF_EXISTS(message);
 
     return ret;
-}
-
-void init_options(void) {
-    options.cipher = NULL;
-    options.mode = KCRYPT_MODE_ECB;
-    options.key = NULL;
-    options.key_path = NULL;
-    options.output_path = NULL;
-    options.input_path = NULL;
-    options.message = NULL;
-    options.remaining_argc = 0;
-    options.remaining_argv = NULL;
 }
 
 
@@ -582,7 +572,7 @@ int parse_args(int argc, char **argv) {
      */
     exe_name = argv[0];
     if (argc < 3) {
-        print_usage(exe_name);
+        print_usage();
         return CPLIB_ERR_ARG;
     }
 
@@ -607,7 +597,7 @@ int parse_args(int argc, char **argv) {
             return CPLIB_ERR_ARG;
         }
 
-        print_usage(exe_name);
+        print_usage();
         return CPLIB_ERR_ARG;
     }
 
@@ -621,7 +611,7 @@ int parse_args(int argc, char **argv) {
             case 'f':
                 if (options.message) {
                     LOG_MSG("Provide either -f, -m or neither\n");
-                    print_usage(exe_name);
+                    print_usage();
                     return CPLIB_ERR_ARG;
                 }
 
@@ -630,7 +620,7 @@ int parse_args(int argc, char **argv) {
             case 'k':
                 if (options.key_path) {
                     LOG_MSG("Provide either -k or -l\n");
-                    print_usage(exe_name);
+                    print_usage();
                     return CPLIB_ERR_ARG;
                 }
                 options.key = optarg;
@@ -638,7 +628,7 @@ int parse_args(int argc, char **argv) {
             case 'l':
                 if (options.key) {
                     LOG_MSG("Provide either -k or -l\n");
-                    print_usage(exe_name);
+                    print_usage();
                     return CPLIB_ERR_ARG;
                 }
                 options.key_path = optarg;
@@ -649,14 +639,14 @@ int parse_args(int argc, char **argv) {
             case 'm':
                 if (options.input_path) {
                     LOG_MSG("Provide either -f, -m or neither\n");
-                    print_usage(exe_name);
+                    print_usage();
                     return CPLIB_ERR_ARG;
                 }
                 options.message = optarg;
                 break;
             default:
                 LOG_MSG("Unknown arg: %c\n", opt);
-                print_usage(exe_name);
+                print_usage();
                 return CPLIB_ERR_ARG;
         }
 
@@ -680,7 +670,7 @@ int parse_args(int argc, char **argv) {
 
     if (optind >= argc) {
         LOG_MSG("Missing option argument\n");
-        print_usage(exe_name);
+        print_usage();
         return CPLIB_ERR_ARG;
     }
 
@@ -699,14 +689,7 @@ int parse_args(int argc, char **argv) {
 int main(int argc, char **argv) {
     int ret;
 
-    cplib_mem_chunk_t *key = NULL;
-    cplib_block_iterator_base_t *block_iterator = NULL;
-    cplib_mode_base_t *mode = NULL;
-    cplib_block_padder_base_t *padder = NULL;
-    cplib_writer_base_t *writer = NULL;
-    cplib_cipher_base_t *cipher = NULL;
-    cplib_key_provider_factory_base_t *key_provider_factory;
-
+    init_options();
     ret = parse_args(argc, argv);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to parse arguments. code: %d\n", ret);
@@ -720,21 +703,8 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    CPLIB_HOLD_IF_EXISTS(key_provider_factory);
-    CPLIB_HOLD_IF_EXISTS(block_iterator);
-    CPLIB_HOLD_IF_EXISTS(mode);
-    CPLIB_HOLD_IF_EXISTS(cipher);
-    CPLIB_HOLD_IF_EXISTS(padder);
-    CPLIB_HOLD_IF_EXISTS(writer);
 
-    ret = run_kcrypt(
-            key,
-            key_provider_factory,
-            block_iterator,
-            writer,
-            mode,
-            cipher,
-            padder);
+    ret = run_kcrypt();
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("KCrypt failed. Code: %d\n", ret);
         goto cleanup;
@@ -742,13 +712,6 @@ int main(int argc, char **argv) {
 
     cleanup:
 
-    CPLIB_PUT_IF_EXISTS(key);
-    CPLIB_PUT_IF_EXISTS(key_provider_factory);
-    CPLIB_PUT_IF_EXISTS(block_iterator);
-    CPLIB_PUT_IF_EXISTS(mode);
-    CPLIB_PUT_IF_EXISTS(cipher);
-    CPLIB_PUT_IF_EXISTS(padder);
-    CPLIB_PUT_IF_EXISTS(writer);
 
     if (kcrypt_context.mode_lib_handle) {
         dlclose(kcrypt_context.mode_lib_handle);

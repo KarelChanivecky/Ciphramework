@@ -102,7 +102,7 @@ const char *supported_modes[] = {
 };
 
 int kcrypt_init_cipher_module_api(kcrypt_cipher_module_api_t * cipher_module) {
-    cipher_module->get_suite = xor_cipher_get_suite;
+    cipher_module->get_cipher = xor_cipher_get_suite;
     cipher_module->supported_modes = supported_modes;
     cipher_module->supported_mode_count = 5;
     cipher_module->supported_key_sizes = supported_key_sizes;

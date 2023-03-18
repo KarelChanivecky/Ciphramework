@@ -30,12 +30,11 @@ struct kcrypt_shared_module_api_t {
 typedef struct kcrypt_shared_module_api_t kcrypt_shared_module_api_t;
 
 
-typedef int (*kcrypt_get_cipher_suite_func_t)(
+typedef int (*kcrypt_get_cipher_f)(
         int argc,
         const char **argv,
         cplib_cipher_factory_base_t **cipher_factory,
-        cplib_key_provider_base_t **key_provider,
-        cplib_block_padder_base_t **padder);
+        cplib_key_provider_base_t **key_provider);
 
 
 struct kcrypt_cipher_module_api_t {
@@ -46,18 +45,24 @@ struct kcrypt_cipher_module_api_t {
     const char **supported_modes;
     char *mandatory_mode;
     unsigned int supported_mode_count;
-    kcrypt_get_cipher_suite_func_t get_suite;
+    kcrypt_get_cipher_f get_cipher;
 };
 
 typedef struct kcrypt_cipher_module_api_t kcrypt_cipher_module_api_t;
 
 typedef size_t (*kcrypt_get_output_key_size_f)(size_t input_key_size);
 
+typedef int (*kcrypt_get_mode_f)(int argc,
+                                 const char **argv,
+                                 cplib_mode_base_t **mode,
+                                 cplib_block_padder_base_t **padder);
+
 struct kcrypt_mode_module_api_t {
     kcrypt_shared_module_api_t;
     size_t *supported_key_sizes;
     unsigned int supported_key_sizes_count;
     kcrypt_get_output_key_size_f get_output_key_size;
+    kcrypt_get_mode_f get_mode;
 };
 
 typedef struct kcrypt_mode_module_api_t kcrypt_mode_module_api_t;

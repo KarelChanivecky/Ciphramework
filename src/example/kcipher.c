@@ -202,8 +202,7 @@ int kcipher_get_suite(
         int argc,
         const char **argv,
         cplib_cipher_factory_base_t **cipher_factory,
-        cplib_key_provider_factory_base_t **key_provider_factory,
-        cplib_block_padder_base_t ** padder) {
+        cplib_key_provider_factory_base_t **key_provider_factory) {
 
     return CPLIB_ERR_SUCCESS;
 }
