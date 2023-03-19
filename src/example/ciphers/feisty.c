@@ -188,7 +188,7 @@ int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
         cipher_module->supported_mode_count = 1;
         cipher_module->supported_key_sizes = supported_key_sizes;
         cipher_module->supported_key_sizes_count = 1;
-        cipher_module->block_to_key_size_ratio = 1;
+        cipher_module->block_to_key_size_ratio = 2;
         cipher_module->mandatory_mode = NULL;
         cipher_module->destroy = (cplib_independent_mutator_f) feisty_cipher_module_destroy;
     }

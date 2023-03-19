@@ -531,7 +531,7 @@ int process_parsed_args(void) {
 
     ret = get_block_iterator(input_fd,
                              message,
-                             kcrypt_context.effective_key_size,
+                             kcrypt_context.block_size,
                              &kcrypt_context.block_iterator);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to get block iterator. code: %d\n", ret);
