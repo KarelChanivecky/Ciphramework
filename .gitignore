@@ -16,7 +16,7 @@
 /cmake-build-mem/
 /cmake-build-release/
 /cmake-build-verbose/
-/src/example/test/encrypted/
-/src/example/test/decrypted/
-/src/example/test/build/
-/src/example/test/.idea/
+/src/kcrypt/test/encrypted/
+/src/kcrypt/test/decrypted/
+/src/kcrypt/test/build/
+/src/kcrypt/test/.idea/

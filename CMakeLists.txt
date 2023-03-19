@@ -22,16 +22,16 @@ set(BUILD_TYPE_COMPILER_FLAG "-D${CPLIB_BUILD_TYPE}")
 message("CPLIB_BUILD_TYPE: ${BUILD_TYPE_COMPILER_FLAG}")
 
 include_directories(
-        ./src/ciphrameworklib/include
-        src/example/include
+        src/ciphramework/include
+        src/kcrypt/include
 )
 
 add_library(
         ciphramework SHARED
-        src/ciphrameworklib/cplib_mem.c
-        src/ciphrameworklib/base_objects.c
-        src/ciphrameworklib/cplib_utils.c
-        src/ciphrameworklib/cipher_driver.c
+        src/ciphramework/cplib_mem.c
+        src/ciphramework/base_objects.c
+        src/ciphramework/cplib_utils.c
+        src/ciphramework/cipher_driver.c
 )
 
 target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
@@ -42,7 +42,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/ciphers)
 
 add_library(
         feisty SHARED
-        src/example/ciphers/feisty.c
+        src/ciphers/feisty.c
 )
 
 target_compile_options(feisty PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
@@ -50,7 +50,7 @@ target_link_libraries(feisty ciphramework)
 
 add_library(
         xor SHARED
-        src/example/ciphers/xor.c
+        src/ciphers/xor.c
 )
 
 target_compile_options(xor PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
@@ -61,7 +61,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/modes)
 
 add_library(
         ECB SHARED
-        src/example/modes/ECB.c
+        src/modes/ECB.c
 )
 
 target_compile_options(ECB PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
@@ -71,8 +71,8 @@ target_link_libraries(ECB ciphramework)
 # KCRYPT
 add_executable(
         kcrypt
-        src/example/main.c
-        src/example/kcrypt_utils.c
+        src/kcrypt/main.c
+        src/kcrypt/kcrypt_utils.c
 )
 
 target_link_libraries(kcrypt ciphramework dc_utils dl)
