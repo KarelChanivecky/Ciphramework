@@ -67,6 +67,10 @@ void init_options(void) {
     options.remaining_argv = NULL;
 }
 
+void init_context(void) {
+    kcrypt_context.cipher_module_api.struct_size = sizeof(kcrypt_cipher_module_api_t);
+    kcrypt_context.mode_module_api.struct_size = sizeof(kcrypt_mode_module_api_t);
+}
 
 int run_kcrypt(void) {
     int ret;
@@ -189,7 +193,10 @@ void print_usage(void) {
             "\n"
             "%s help <cipher | mode>\n"
             "list available ciphers or modes\n"
+            "\n"
             "%s help < cipher <cipher name> | mode <mode name> >\n"
+            "Get help on a specific cipher or mode\n"
+            "\n"
             "Not all ciphers or modes need options. But for those that do, pass the options after the main options by\n"
             "adding '-- CIPHER' or '--MODE' respectively, following, add the options.\n",
             exe_name, exe_name, exe_name);
@@ -290,7 +297,7 @@ int print_lib_usage(char *lib_type, char *lib_name) {
     lib_path->append(lib_path, lib_name, lib_name_len);
     lib_path->append(lib_path, ".so\0", 4);
 
-    ret = kcrypt_init_module_api(lib_path->mem, &shared_module_api, lib_handle);
+    ret = kcrypt_init_module_api(lib_path->mem, &shared_module_api, &lib_handle);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to initialize lib %s\n", lib_name);
         return ret;
@@ -424,6 +431,11 @@ int validate_key_size(void) {
 
     LOG_DEBUG("Effective key size: %zu\n", ctx->effective_key_size);
 
+    if (kcrypt_context.cipher_module_api.supported_key_sizes[0] == KCRYPT_ANY_KEY_SIZE) {
+        LOG_DEBUG("Cipher supports any key size\n");
+        return CPLIB_ERR_SUCCESS;
+    }
+
     if (!kcrypt_match_sizes(ctx->effective_key_size,
                             ctx->cipher_module_api.supported_key_sizes,
                             ctx->cipher_module_api.supported_key_sizes_count)) {
@@ -432,6 +444,7 @@ int validate_key_size(void) {
         return CPLIB_ERR_KEY_SIZE;
     }
 
+    LOG_DEBUG("Cipher supports key size of %zu\n", kcrypt_context.effective_key_size);
     return CPLIB_ERR_SUCCESS;
 }
 
@@ -622,7 +635,8 @@ int parse_args(int argc, char **argv) {
 
     options.cipher = argv[1];
 
-    while ((opt = getopt(argc, argv, "p:k:l:o:f:m:c:d:")) != -1) {
+    // argv + 1: skip the cipher arg.
+    while ((opt = getopt(argc - 1, argv + 1, "p:k:l:o:f:m:c:d:")) != -1) {
         switch (opt) {
             case 'd':
                 options.mode = optarg;
@@ -687,7 +701,7 @@ int parse_args(int argc, char **argv) {
 
     }
 
-    LOG_DEBUG("Arguments parsed:"
+    LOG_DEBUG("Arguments parsed:\n"
               "options->process: %d\n"
               "options->cipher: %s\n"
               "options->input_path: %s\n"
@@ -715,8 +729,8 @@ int parse_args(int argc, char **argv) {
         return CPLIB_ERR_SUCCESS;
     }
     // optind is pointing at the next arg. Hence, the actual number of args consumed is one less than optind.
-    options.remaining_argc = argc - optind + 1;
-    options.remaining_argv = argv + optind;
+    options.remaining_argc = argc - optind - 1;
+    options.remaining_argv = argv + optind + 1;
 
     set_module_args();
     return CPLIB_ERR_SUCCESS;
@@ -725,8 +739,10 @@ int parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     int ret;
-
+    system("pwd");
     init_options();
+    init_context();
+
     ret = parse_args(argc, argv);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to parse arguments. code: %d\n", ret);

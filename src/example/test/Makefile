@@ -6,7 +6,7 @@ kcrypt: FORCE
 clean:
 	rm -rdf ./decrypted/**
 	rm -rdf ./encrypted/**
-	make -C ./build clean
+	make -C ./build clean || echo No need to clean build dir
 
 test: clean kcrypt
 	./test.sh

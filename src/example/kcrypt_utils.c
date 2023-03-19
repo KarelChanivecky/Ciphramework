@@ -39,16 +39,18 @@ int kcrypt_get_available_shared_libs(char *dirname, cplib_mem_chunk_t ***lib_nam
 
     while (directory_entry != NULL) {
         if (directory_entry->d_type == DT_DIR) {
-            continue;
+            goto next;
         }
 
         if (directory_entry->d_name[0] == '.') {
-            continue;
+            goto next;
+
         }
         dir_entry_name_len = strnlen(directory_entry->d_name, NAME_MAX);
 
         if (strncmp(directory_entry->d_name + dir_entry_name_len - 3, ".so", dir_entry_name_len) != 0) {
-            continue;
+            goto next;
+
         }
 
         LOG_DEBUG("Found shared library: %s\n", directory_entry->d_name);
@@ -59,6 +61,7 @@ int kcrypt_get_available_shared_libs(char *dirname, cplib_mem_chunk_t ***lib_nam
             return CPLIB_ERR_MEM;
         }
 
+        next:
         directory_entry = readdir(directory);
     }
 
@@ -72,7 +75,7 @@ int kcrypt_get_available_shared_libs(char *dirname, cplib_mem_chunk_t ***lib_nam
     if (dlinked_to_pointer(lib_name_list, (void ***) lib_names) != SUCCESS) {
         ret = CPLIB_ERR_MEM;
     } else {
-        ret = SUCCESS;
+        ret = CPLIB_ERR_SUCCESS;
     }
 
     *lib_count = lib_name_list->size;
@@ -165,16 +168,16 @@ kcrypt_n_match(cplib_mem_chunk_t **left,
                unsigned int right_count,
                size_t max_comp) {
     size_t min_size;
-    cplib_mem_chunk_t * left_str;
-    cplib_mem_chunk_t * right_str;
+    cplib_mem_chunk_t *left_str;
+    cplib_mem_chunk_t *right_str;
 
 
     for (unsigned int left_i = 0; left_i < left_count; left_i++) {
         left_str = left[left_i];
         for (unsigned int right_i = 0; right_i < right_count; right_i++) {
             right_str = right[right_i];
-            min_size = left_str->size < right_str->size? left_str->size : right_str->size;
-            min_size = min_size < max_comp? min_size : max_comp;
+            min_size = left_str->size < right_str->size ? left_str->size : right_str->size;
+            min_size = min_size < max_comp ? min_size : max_comp;
 
             if (kcrypt_caseless_n_cmp(left_str->mem, right_str->mem, min_size) == 0) {
                 return 1;
@@ -193,7 +196,7 @@ kcrypt_match(cplib_mem_chunk_t **left, unsigned int left_count, cplib_mem_chunk_
 int open_lib(const char *lib_name, void **init_func, void **library_api_handle) {
 
     *library_api_handle = dlopen(lib_name, RTLD_LAZY);
-    if (library_api_handle == NULL) {
+    if (*library_api_handle == NULL) {
         LOG_MSG("Could not load library: %s; %s\n", lib_name, dlerror());
         return CPLIB_ERR_OS;
     }
@@ -222,28 +225,29 @@ int kcrypt_init_module_api(const char *api_path, kcrypt_shared_module_api_t *lib
     return (*api_init_func)(lib_api);
 }
 
-int kcrypt_make_lib_path(const char * lib_dir, const char * lib_name, cplib_mem_chunk_t ** lib_path) {
-    cplib_mem_chunk_t * path;
+int kcrypt_make_lib_path(const char *lib_dir, const char *lib_name, cplib_mem_chunk_t **lib_path) {
+    cplib_mem_chunk_t *path;
     size_t dir_len = strlen(lib_dir);
     size_t lib_name_len = strlen(lib_name);
 
-    path = cplib_allocate_mem_chunk(dir_len + lib_name_len + 2);
+    path = cplib_allocate_mem_chunk(dir_len + lib_name_len + 13);
     if (path == NULL) {
         LOG_MSG("Could not allocate memory for path\n");
         return CPLIB_ERR_MEM;
     }
 
+    path->append(path, "$ORIGIN/", 8);
     path->append(path, lib_dir, dir_len);
     path->append(path, "/", 1);
     path->append(path, lib_name, lib_name_len);
-    path->append(path, "\0", 1);
+    path->append(path, ".so\0", 4);
 
     *lib_path = path;
 
     return CPLIB_ERR_SUCCESS;
 }
 
-int kcrypt_match_sizes(size_t size, const size_t * sizes, unsigned int sizes_c) {
+int kcrypt_match_sizes(size_t size, const size_t *sizes, unsigned int sizes_c) {
     for (unsigned int i = 0; i < sizes_c; i++) {
         if (size == sizes[i]) {
             return 1;

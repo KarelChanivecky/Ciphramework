@@ -3,13 +3,13 @@ project(Sources C)
 
 set(CMAKE_C_STANDARD 17)
 
-#include(FetchContent)
-#FetchContent_Declare(
-#        dc_utils
-#        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
-#        GIT_TAG main
-#)
-#FetchContent_MakeAvailable(dc_utils)
+include(FetchContent)
+FetchContent_Declare(
+        dc_utils
+        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
+        GIT_TAG main
+)
+FetchContent_MakeAvailable(dc_utils)
 
 set(CPLIB_BUILD_TYPE ${BUILD_TYPE})
 message("BUILD_TYPE:  ${BUILD_TYPE}")
@@ -75,7 +75,8 @@ add_executable(
         src/example/kcrypt_utils.c
 )
 
-
 target_link_libraries(kcrypt ciphramework dc_utils dl)
 
 target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+
+add_dependencies(kcrypt ciphramework feisty xor  ECB)

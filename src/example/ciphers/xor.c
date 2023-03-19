@@ -117,17 +117,18 @@ static char *help_text =
         "Supported modes: [" KCRYPT_MODE_ANY "]\n"
         "Supported key sizes: [" KCRYPT_ANY_KEY_SIZE_STR "]\n";
 
-int kcrypt_init_cipher_module_api(kcrypt_cipher_module_api_t *cipher_module) {
-    cipher_module->get_cipher = (kcrypt_get_cipher_f) xor_cipher_get_suite;
-    cipher_module->supported_modes = supported_modes;
-    cipher_module->supported_mode_count = 1;
-    cipher_module->supported_key_sizes = supported_key_sizes;
-    cipher_module->supported_key_sizes_count = 1;
-    cipher_module->block_to_key_size_ratio = 1;
+int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
+    if (cipher_module->struct_size == sizeof(kcrypt_cipher_module_api_t)) {
+        cipher_module->get_cipher = (kcrypt_get_cipher_f) xor_cipher_get_suite;
+        cipher_module->supported_modes = supported_modes;
+        cipher_module->supported_mode_count = 1;
+        cipher_module->supported_key_sizes = supported_key_sizes;
+        cipher_module->supported_key_sizes_count = 1;
+        cipher_module->block_to_key_size_ratio = 1;
+        cipher_module->mandatory_mode = NULL;
+        cipher_module->destroy = (cplib_independent_mutator_f) xor_cipher_module_destroy;
+    }
     cipher_module->help_text = help_text;
-    cipher_module->mandatory_mode = NULL;
-    cipher_module->destroy = (cplib_independent_mutator_f) xor_cipher_module_destroy;
-    cipher_module->struct_size = sizeof(kcrypt_cipher_module_api_t);
 
     return CPLIB_ERR_SUCCESS;
 }

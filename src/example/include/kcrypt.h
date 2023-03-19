@@ -68,7 +68,6 @@ typedef struct kcrypt_mode_module_api_t kcrypt_mode_module_api_t;
 
 typedef int(*kcrypt_lib_api_init_f)(void *lib_api);
 
-// Matches any mode. Place at the start of supported modes.
 #define KCRYPT_MODE_ANY "ANY"
 // common modes
 #define KCRYPT_MODE_ECB "ECB"

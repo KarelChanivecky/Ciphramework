@@ -30,7 +30,7 @@ for key_path in "${key_paths[@]}"; do
     cipher_path="./encrypted/$plaintext_name-$key_name.kcrypt"
     decrypted_path="./decrypted/$plaintext_name"
     echo "$index/$total_tests testing plaintext, key combination: $plaintext_name, $key_name"
-    $EXE -p e -l $key_path -f $plaintext_path -o $cipher_path
+    $EXE feisty -p e -l $key_path -f $plaintext_path -o $cipher_path
     if [ $? -ne 0 ]
     then
        echo "TEST FAILED: encryption failed"
@@ -38,7 +38,7 @@ for key_path in "${key_paths[@]}"; do
        continue
     fi
 
-    $EXE -p d -l $key_path -f $cipher_path -o $decrypted_path
+    $EXE feisty -p d -l $key_path -f $cipher_path -o $decrypted_path
     if [ $? -ne 0 ]
     then
       echo "TEST FAILED: decryption failed"

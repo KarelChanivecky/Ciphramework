@@ -41,15 +41,16 @@ int ECB_destroy(void * unused) {
     return CPLIB_ERR_SUCCESS;
 }
 
-int kcrypt_lib_api_init(void *lib_api) {
+int kcrypt_lib_init(void *lib_api) {
     kcrypt_mode_module_api_t * api = (kcrypt_mode_module_api_t *)lib_api;
-
-    api->supported_key_sizes = supported_key_sizes;
-    api->supported_key_sizes_count = 1;
-    api->get_output_key_size = ECB_get_output_key_size;
-    api->get_mode = ECB_get_mode;
+    if (api->struct_size == sizeof(kcrypt_mode_module_api_t)) {
+        api->supported_key_sizes = supported_key_sizes;
+        api->supported_key_sizes_count = 1;
+        api->get_output_key_size = ECB_get_output_key_size;
+        api->get_mode = ECB_get_mode;
+        api->destroy = ECB_destroy;
+    }
     api->help_text = help_text;
-    api->struct_size = sizeof(kcrypt_mode_module_api_t);
-    api->destroy = ECB_destroy;
+
     return CPLIB_ERR_SUCCESS;
 }

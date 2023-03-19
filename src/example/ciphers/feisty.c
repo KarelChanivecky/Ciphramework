@@ -9,10 +9,10 @@
 
 
 int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
-                             cplib_mem_chunk_t *data,
-                             cplib_mem_chunk_t *key,
-                             enum cplib_block_position position,
-                             cplib_mem_chunk_t **processed_ptr) {
+                                cplib_mem_chunk_t *data,
+                                cplib_mem_chunk_t *key,
+                                enum cplib_block_position position,
+                                cplib_mem_chunk_t **processed_ptr) {
     CPLIB_UNUSED_PARAM(base_self);
     CPLIB_UNUSED_PARAM(position);
     int ret;
@@ -60,15 +60,15 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
 }
 
 int feisty_cipher_round_function(cplib_destroyable_t *round_f_self,
-                           cplib_mem_chunk_t *data,
-                           cplib_mem_chunk_t *key,
-                           enum cplib_block_position position,
-                           cplib_mem_chunk_t **processed_ptr) {
+                                 cplib_mem_chunk_t *data,
+                                 cplib_mem_chunk_t *key,
+                                 enum cplib_block_position position,
+                                 cplib_mem_chunk_t **processed_ptr) {
     CPLIB_UNUSED_PARAM(round_f_self);
     return feisty_cipher_proc_function(round_f_self, data, key, position, processed_ptr);
 }
 
-cplib_keyed_key_provider_t *allocate_key_provider(cplib_key_provider_factory_base_t* self) {
+cplib_keyed_key_provider_t *allocate_key_provider(cplib_key_provider_factory_base_t *self) {
     CPLIB_UNUSED_PARAM(self);
     return cplib_keyed_key_provider_new3();
 }
@@ -149,7 +149,7 @@ int feisty_cipher_get_suite(
     CPLIB_UNUSED_PARAM(argc);
     CPLIB_UNUSED_PARAM(argv);
     CPLIB_UNUSED_PARAM(proc_type);
-    
+
     *cipher_factory = (cplib_cipher_factory_base_t *) feisty_cipher_get_cipher_factory();
     if (!*cipher_factory) {
         return CPLIB_ERR_MEM;
@@ -170,7 +170,7 @@ int feisty_cipher_module_destroy(kcrypt_shared_module_api_t *cipher_module) {
     return CPLIB_ERR_SUCCESS;
 }
 
-static size_t supported_key_sizes[] = {32};
+static size_t supported_key_sizes[] = {4};
 static const char *supported_modes[] = {
         KCRYPT_MODE_ANY
 };
@@ -178,19 +178,22 @@ static const char *supported_modes[] = {
 static char *help_text =
         "Usage -- " KCRYPT_CLI_CIPHER_ARGS_HEADER "\n"
         "Supported modes: [" KCRYPT_MODE_ANY "]\n"
-        "Supported key sizes: [32]\n";
+        "Supported key sizes: [32b]\n";
 
-int kcrypt_init_cipher_module_api(kcrypt_cipher_module_api_t *cipher_module) {
-    cipher_module->get_cipher = (kcrypt_get_cipher_f) feisty_cipher_get_suite;
-    cipher_module->supported_modes = (const char **) supported_modes;
-    cipher_module->supported_mode_count = 1;
-    cipher_module->supported_key_sizes = supported_key_sizes;
-    cipher_module->supported_key_sizes_count = 1;
-    cipher_module->block_to_key_size_ratio = 1;
+int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
+
+    if (cipher_module->struct_size == sizeof(kcrypt_cipher_module_api_t)) {
+        cipher_module->get_cipher = (kcrypt_get_cipher_f) feisty_cipher_get_suite;
+        cipher_module->supported_modes = (const char **) supported_modes;
+        cipher_module->supported_mode_count = 1;
+        cipher_module->supported_key_sizes = supported_key_sizes;
+        cipher_module->supported_key_sizes_count = 1;
+        cipher_module->block_to_key_size_ratio = 1;
+        cipher_module->mandatory_mode = NULL;
+        cipher_module->destroy = (cplib_independent_mutator_f) feisty_cipher_module_destroy;
+    }
+
     cipher_module->help_text = help_text;
-    cipher_module->mandatory_mode = NULL;
-    cipher_module->destroy = (cplib_independent_mutator_f) feisty_cipher_module_destroy;
-    cipher_module->struct_size = sizeof(kcrypt_cipher_module_api_t);
 
     return CPLIB_ERR_SUCCESS;
 }
