@@ -7,6 +7,8 @@
 #include "cplib_utils.h"
 #include "cplib_log.h"
 
+static char error_text[KCRYPT_ERROR_TEXT_MAX_LENGTH] = {0};
+
 
 int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
                                 cplib_mem_chunk_t *data,
@@ -175,6 +177,12 @@ static const char *supported_modes[] = {
         KCRYPT_MODE_ANY
 };
 
+char *get_error_text(kcrypt_cipher_module_api_t *self) {
+    CPLIB_UNUSED_PARAM(self);
+    return error_text;
+}
+
+
 static char *help_text =
         "Usage -- " KCRYPT_CLI_CIPHER_ARGS_HEADER "\n"
         "Supported modes: [" KCRYPT_MODE_ANY "]\n"
@@ -194,6 +202,7 @@ int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
     }
 
     cipher_module->help_text = help_text;
+    cipher_module->get_error_text = (error_text_f) get_error_text;
 
     return CPLIB_ERR_SUCCESS;
 }

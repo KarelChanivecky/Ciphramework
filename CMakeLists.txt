@@ -41,12 +41,20 @@ set(CMAKE_SHARED_LIBRARY_PREFIX "")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/ciphers)
 
 add_library(
-        feisty SHARED
-        src/ciphers/feisty.c
+        feisty.no_round_key SHARED
+        src/ciphers/feisty.no_round_key.c
 )
 
-target_compile_options(feisty PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
-target_link_libraries(feisty ciphramework)
+target_compile_options(feisty.no_round_key PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(feisty.no_round_key ciphramework)
+
+add_library(
+        feisty.configurable_round_key SHARED
+        src/ciphers/feisty.configurable_round_key.c
+)
+
+target_compile_options(feisty.configurable_round_key PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(feisty.configurable_round_key ciphramework)
 
 add_library(
         xor SHARED
@@ -79,4 +87,10 @@ target_link_libraries(kcrypt ciphramework dc_utils dl)
 
 target_compile_options(kcrypt PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 
-add_dependencies(kcrypt ciphramework feisty xor  ECB)
+add_dependencies(
+        kcrypt
+        ciphramework
+        feisty.no_round_key
+        feisty.configurable_round_key
+        xor
+        ECB)

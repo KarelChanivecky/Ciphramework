@@ -64,6 +64,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             }
 
             cipher->initialize(cipher, self->_cipher);
+            CPLIB_PUT_IF_EXISTS(self->_cipher);
             self->_cipher = cipher;
             if (extra) {
                 LOG_VERBOSE("Got extra\n");
@@ -185,6 +186,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     CPLIB_PUT_IF_EXISTS(post_modded);
     CPLIB_PUT_IF_EXISTS(unpadded);
     CPLIB_PUT_IF_EXISTS(key);
+    CPLIB_PUT_IF_EXISTS(self->_cipher);
     writer->close(writer);
 
     return ret;

@@ -257,6 +257,8 @@ int cplib_round_key_provider_base_destroy(cplib_round_key_provider_base_t *round
 
 int cplib_round_key_provider_next(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key);
 
+int cplib_round_key_provider_same(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key);
+
 int cplib_round_key_provider_next_reverse(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key);
 
 // ------------------------------------------------------------------------

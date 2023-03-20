@@ -286,12 +286,13 @@ int print_lib_usage(char *lib_type, char *lib_name) {
     lib_type_len = strlen(lib_type);
     lib_path_len = full_lib_name_len + lib_type_len;
 
-    lib_path = cplib_allocate_mem_chunk(sizeof(char) * lib_path_len + 2); // null byte and '/' for path
+    lib_path = cplib_allocate_mem_chunk(sizeof(char) * lib_path_len + 10); // null byte and '/' for path
     if (!lib_path) {
         LOG_MSG("Failed to allocate memory for lib path\n");
         return CPLIB_ERR_MEM;
     }
 
+    lib_path->append(lib_path, "$ORIGIN/", 8);
     lib_path->append(lib_path, lib_type, lib_type_len);
     lib_path->append(lib_path, "/", 1);
     lib_path->append(lib_path, lib_name, lib_name_len);
@@ -316,8 +317,8 @@ int find_module_args(char *header, int argc, char **argv, int *module_argc, char
     for (int i = 0; i < argc; i++) {
         if (strncmp(header, argv[i], strlen(header)) == 0) {
             // module argv starts on next arg from the header
-            *module_argc = argc - i - 1;
-            *module_argv = argv + i + 1;
+            *module_argc = argc - i;
+            *module_argv = argv + i;
             return CPLIB_ERR_SUCCESS;
         }
     }

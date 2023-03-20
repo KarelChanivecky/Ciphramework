@@ -1131,3 +1131,19 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
 
 // ------------------------------------------------------------------------
 
+int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned long long * result) {
+    unsigned long long ret;
+
+    ret =  strtoull(nptr, endptr, base);
+
+    if (errno != 0) {
+        LOG_DEBUG("strtoull failed: %s\n", strerror(errno));
+        return CPLIB_ERR_ARG;
+    }
+
+    *result = ret;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+// ------------------------------------------------------------------------

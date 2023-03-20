@@ -17,11 +17,17 @@
 
 #define KCRYPT_LIB_MODULE_INIT_FUNCTION_NAME "kcrypt_lib_init"
 
+#define KCRYPT_ERROR_TEXT_MAX_LENGTH 512
+
+struct kcrypt_shared_module_api_t;
+
+typedef char *(*error_text_f)(struct kcrypt_shared_module_api_t * self);
 
 struct kcrypt_shared_module_api_t {
     cplib_destroyable_t;
     const char *help_text;
     size_t struct_size;
+    error_text_f get_error_text;
 };
 
 typedef struct kcrypt_shared_module_api_t kcrypt_shared_module_api_t;

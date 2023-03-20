@@ -7,6 +7,8 @@
 #include "cplib_utils.h"
 #include "cplib_log.h"
 
+static char error_text[KCRYPT_ERROR_TEXT_MAX_LENGTH] = {0};
+
 int xor_cipher_proc_function(struct cplib_cipher_base_t *self,
                              cplib_mem_chunk_t *data,
                              cplib_mem_chunk_t *key,
@@ -117,6 +119,11 @@ static char *help_text =
         "Supported modes: [" KCRYPT_MODE_ANY "]\n"
         "Supported key sizes: [" KCRYPT_ANY_KEY_SIZE_STR "]\n";
 
+char * get_error_text(kcrypt_cipher_module_api_t* self){
+    CPLIB_UNUSED_PARAM(self);
+    return error_text;
+}
+
 int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
     if (cipher_module->struct_size == sizeof(kcrypt_cipher_module_api_t)) {
         cipher_module->get_cipher = (kcrypt_get_cipher_f) xor_cipher_get_suite;
@@ -128,6 +135,7 @@ int kcrypt_lib_init(kcrypt_cipher_module_api_t *cipher_module) {
         cipher_module->mandatory_mode = NULL;
         cipher_module->destroy = (cplib_independent_mutator_f) xor_cipher_module_destroy;
     }
+    cipher_module->get_error_text = (error_text_f) get_error_text;
     cipher_module->help_text = help_text;
 
     return CPLIB_ERR_SUCCESS;

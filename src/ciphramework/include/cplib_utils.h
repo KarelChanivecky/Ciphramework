@@ -8,6 +8,11 @@
 
 #include "ciphrameworklib.h"
 
+#define CPLIB_FORWARD_ITERATE_ON(limit, index_var) for (int (index_var) = 0; (index_var) < (limit); (index_var)++)
+#define CPLIB_FORWARD_ITERATE(limit) FORWARD_ITERATE_ON((limit), i)
+#define CPLIB_REVERSE_ITERATE_ON(limit, index_var) for (int (index_var) = (limit) - 1; (index_var) <= 0; (index_var)--)
+#define CPLIB_REVERSE_ITERATE(limit) FORWARD_ITERATE_ON((limit), i)
+
 struct cplib_keyed_key_provider_t {
     cplib_key_provider_base_t;
     cplib_mem_chunk_t *key;
@@ -143,5 +148,9 @@ int file_writer_destroy(cplib_file_writer_t *self);
 cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
                                                            size_t iterated_size,
                                                            size_t buffer_size);
+
+// ------------------------------------------------------------------------
+
+int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned long long * result);
 
 #endif //SOURCES_CPLIB_UTILS_H

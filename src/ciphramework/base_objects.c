@@ -288,9 +288,25 @@ int cplib_round_key_provider_next(cplib_round_key_provider_base_t *self, cplib_m
         return CPLIB_ERR_ITER_OVERFLOW;
     }
 
+
     *next_key = self->round_keys[self->round_index];
+    cplib_destroyable_hold(self->round_keys[self->round_index]);
 
     self->round_index++;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+int cplib_round_key_provider_same(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t **next_key) {
+    if (self->round_index == 0) {
+        *next_key = NULL;
+        return CPLIB_ERR_ITER_OVERFLOW;
+    }
+
+    *next_key = self->round_keys[0];
+    cplib_destroyable_hold(self->round_keys[0]);
+
+    self->round_index--;
 
     return CPLIB_ERR_SUCCESS;
 }
@@ -302,6 +318,7 @@ int cplib_round_key_provider_next_reverse(cplib_round_key_provider_base_t *self,
     }
 
     *next_key = self->round_keys[self->round_keys_count - self->round_index - 1];
+    cplib_destroyable_hold(self->round_keys[self->round_keys_count - self->round_index - 1]);
 
     self->round_index++;
 
