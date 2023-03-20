@@ -87,14 +87,12 @@ int cbc_mode_decrypt_pre_transform(cbc_mode_t *self,
                                    cplib_mem_chunk_t *key,
                                    enum cplib_block_position position,
                                    cplib_mem_chunk_t **out) {
+    CPLIB_UNUSED_PARAM(data);
     CPLIB_UNUSED_PARAM(key);
     CPLIB_UNUSED_PARAM(position);
     *out = data;
     cplib_destroyable_hold(data);
-    if (position == CPLIB_BLOCK_POS_START) {
-        return CPLIB_ERR_SUCCESS; // The first time, we are using the initialization vector in buffer
-    }
-    return cbc_mode_store_data(self, data);
+    return CPLIB_ERR_SUCCESS;
 }
 
 int cbc_mode_decrypt_post_transform(cbc_mode_t *self,
@@ -245,8 +243,8 @@ int CBC_get_mode(int argc,
 
 static size_t supported_key_sizes[] = {KCRYPT_ANY_KEY_SIZE};
 static const char *help_text = "Usage: -- " KCRYPT_MODE_ECB " < -i <initialization vector> | -f <initialization vector file> >\n"
-                                                            "\n"
-                                                            "Supported key sizes: [" KCRYPT_ANY_KEY_SIZE_STR "]";
+                               "\n"
+                               "Supported key sizes: [" KCRYPT_ANY_KEY_SIZE_STR "]";
 
 int CBC_destroy(void *unused) {
     CPLIB_UNUSED_PARAM(unused);
