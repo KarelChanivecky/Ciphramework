@@ -111,7 +111,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 cplib_destroyable_hold(padded);
                 pre_modded = padded;
             } else {
-                ret = mode->pre_cipher_transform(mode, padded, key, self->block_position, &processed);
+                ret = mode->pre_cipher_transform(mode, padded, key, self->block_position, &pre_modded);
                 if (ret != CPLIB_ERR_SUCCESS) {
                     LOG_MSG("ERROR: Failed to apply pre-cipher mode transform. ret=%d\n", ret);
                     goto cleanup;

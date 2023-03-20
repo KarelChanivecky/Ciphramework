@@ -153,4 +153,6 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
 
 int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned long long * result);
 
+int cplib_read_file(const char *filepath, cplib_mem_chunk_t **file_contents);
+
 #endif //SOURCES_CPLIB_UTILS_H

@@ -97,7 +97,7 @@ cplib_mem_chunk_t *cplib_mem_chunk_new(void *data, size_t size) {
     return chunk;
 }
 
-cplib_mem_chunk_t *cplib_mem_chunk_str_new(char *string) {
+cplib_mem_chunk_t *cplib_mem_chunk_str_new(const char *string) {
     size_t size;
     cplib_mem_chunk_t *chunk;
 

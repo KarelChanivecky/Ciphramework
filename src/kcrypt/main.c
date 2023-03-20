@@ -2,8 +2,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
-#include <errno.h>
-#include <sys/stat.h>
 #include <dlfcn.h>
 
 #include "kcrypt.h"
@@ -29,8 +27,7 @@ typedef struct arg_options_t arg_options_t;
 
 
 struct kcrypt_context_t {
-    size_t input_key_size;
-    size_t effective_key_size;
+    size_t key_size;
     cplib_mem_chunk_t *key;
     cplib_writer_base_t *writer;
     cplib_key_provider_base_t *key_provider;
@@ -107,45 +104,6 @@ int run_kcrypt(void) {
     return ret;
 }
 
-int get_key(char *key_path, cplib_mem_chunk_t **key) {
-    ssize_t ret;
-    int fd;
-    struct stat key_stat;
-    LOG_DEBUG("Getting key from file %s\n", key_path);
-
-    fd = open(key_path, O_RDONLY);
-    if (fd == -1) {
-        LOG_MSG("Failed to open %s due to error: %s\n", key_path, strerror(errno));
-        return CPLIB_ERR_FILE;
-    }
-
-    ret = fstat(fd, &key_stat);
-    if (ret == -1) {
-        LOG_MSG("Failed to stat %s due to error: %s\n", key_path, strerror(errno));
-        return CPLIB_ERR_FILE;
-    }
-
-    *key = cplib_allocate_mem_chunk(key_stat.st_size);
-    if (!*key) {
-        LOG_MSG("Failed to allocate memory for key\n");
-        return CPLIB_ERR_MEM;
-    }
-
-    LOG_VERBOSE("Key size: %ld\n", key_stat.st_size);
-    ret = read(fd, (*key)->mem, key_stat.st_size);
-    if (ret == -1) {
-        LOG_MSG("Failed to read %s due to error: %s\n", key_path, strerror(errno));
-        return CPLIB_ERR_FILE;
-    }
-
-    if (ret != key_stat.st_size) {
-        LOG_MSG("Failed to read key from file.\n");
-    }
-
-    (*key)->taken = key_stat.st_size;
-
-    return CPLIB_ERR_SUCCESS;
-}
 
 int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_size,
                        cplib_block_iterator_base_t **block_iterator) {
@@ -185,7 +143,7 @@ int get_block_iterator(int input_fd, cplib_mem_chunk_t *data, size_t iterated_si
 void print_usage(void) {
     fprintf(stderr,
             "Usage:\n"
-            "%s <cipher> <-p d | -p e> [-k <key> | -l <key file>] [-o <output file>] [-f <input file> | -m <message>] [-- MODE <mode options>] [-- CIPHER <cipher options> ]\n"
+            "%s <cipher> <-p d | -p e> [-d <mode>] [-k <key> | -l <key file>] [-o <output file>] [-f <input file> | -m <message>] [-- MODE <mode options>] [-- CIPHER <cipher options> ]\n"
             "-p e for encryption\n"
             "-p d for encryption\n"
             "if -o is not provided writes to stdout\n"
@@ -386,8 +344,7 @@ int load_apis(void) {
         return ret;
     }
 
-    ctx->input_key_size = ctx->key->taken;
-    ctx->effective_key_size = ctx->key->taken;
+    ctx->key_size = ctx->key->taken;
 
     ret = get_module(KCRYPT_MODE_LIB_DIR,
                      options.mode,
@@ -420,7 +377,7 @@ int validate_key_size(void) {
     kcrypt_context_t *ctx = &kcrypt_context;
 
     if (ctx->mode_module_api.supported_key_sizes[0] != KCRYPT_ANY_KEY_SIZE
-        && !kcrypt_match_sizes(ctx->input_key_size,
+        && !kcrypt_match_sizes(ctx->key_size,
                                ctx->mode_module_api.supported_key_sizes,
                                ctx->mode_module_api.supported_key_sizes_count)) {
         LOG_MSG("Mode does not support given key size\n"
@@ -428,24 +385,20 @@ int validate_key_size(void) {
         return CPLIB_ERR_KEY_SIZE;
     }
 
-    kcrypt_context.effective_key_size = ctx->mode_module_api.get_output_key_size(ctx->input_key_size);
-
-    LOG_DEBUG("Effective key size: %zu\n", ctx->effective_key_size);
-
     if (kcrypt_context.cipher_module_api.supported_key_sizes[0] == KCRYPT_ANY_KEY_SIZE) {
         LOG_DEBUG("Cipher supports any key size\n");
         return CPLIB_ERR_SUCCESS;
     }
 
-    if (!kcrypt_match_sizes(ctx->effective_key_size,
+    if (!kcrypt_match_sizes(ctx->key_size,
                             ctx->cipher_module_api.supported_key_sizes,
                             ctx->cipher_module_api.supported_key_sizes_count)) {
-        LOG_MSG("Cipher does not support the effective key size %zu. "
-                "The effective key size may be affected by the mode\n", ctx->effective_key_size);
+        LOG_MSG("Cipher does not support the key size %zu. "
+                "The effective key size may be affected by the mode\n", ctx->key_size);
         return CPLIB_ERR_KEY_SIZE;
     }
 
-    LOG_DEBUG("Cipher supports key size of %zu\n", kcrypt_context.effective_key_size);
+    LOG_DEBUG("Cipher supports key size of %zu\n", kcrypt_context.key_size);
     return CPLIB_ERR_SUCCESS;
 }
 
@@ -480,8 +433,9 @@ int process_parsed_args(void) {
     }
 
     if (options.key_path) {
-        ret = get_key(options.key_path, &kcrypt_context.key);
+        ret = cplib_read_file(options.key_path, &kcrypt_context.key);
         if (ret != CPLIB_ERR_SUCCESS) {
+            LOG_MSG("Failed to read key file %s\n", options.key_path);
             goto error_cleanup;
         }
     }
@@ -527,7 +481,7 @@ int process_parsed_args(void) {
     }
 
     block_to_key_ratio = kcrypt_context.cipher_module_api.block_to_key_size_ratio;
-    kcrypt_context.block_size = block_to_key_ratio * kcrypt_context.effective_key_size;
+    kcrypt_context.block_size = block_to_key_ratio * kcrypt_context.key_size;
 
 
     ret = get_block_iterator(input_fd,
@@ -562,7 +516,8 @@ int process_parsed_args(void) {
                                                   (const char **) kcrypt_context.mode_argv,
                                                   options.process,
                                                   &kcrypt_context.mode,
-                                                  &kcrypt_context.padder);
+                                                  &kcrypt_context.padder,
+                                                  kcrypt_context.block_size);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to initialize mode\n");
         if (ret == CPLIB_ERR_ARG) {
@@ -618,7 +573,7 @@ int parse_args(int argc, char **argv) {
                 print_lib_usage(KCRYPT_CIPHER_LIB_DIR, argv[3]);
             }
 
-            return CPLIB_ERR_ARG;
+            return CPLIB_ERR_HELP;
         } else if (strncmp(argv[2], "mode", 4) == 0) {
 
             if (argc == 3) {
@@ -627,11 +582,11 @@ int parse_args(int argc, char **argv) {
                 print_lib_usage(KCRYPT_MODE_LIB_DIR, argv[3]);
             }
 
-            return CPLIB_ERR_ARG;
+            return CPLIB_ERR_HELP;
         }
 
         print_usage();
-        return CPLIB_ERR_ARG;
+        return CPLIB_ERR_HELP;
     }
 
     options.cipher = argv[1];
@@ -740,12 +695,15 @@ int parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     int ret;
-    system("pwd");
     init_options();
     init_context();
 
     ret = parse_args(argc, argv);
     if (ret != CPLIB_ERR_SUCCESS) {
+        if (ret == CPLIB_ERR_HELP) {
+            return CPLIB_ERR_SUCCESS;
+        }
+
         LOG_MSG("Failed to parse arguments. code: %d\n", ret);
         goto cleanup;
     }
@@ -766,6 +724,13 @@ int main(int argc, char **argv) {
 
     cleanup:
 
+    if (kcrypt_context.mode_module_api.destroy != NULL) {
+        kcrypt_context.mode_module_api.destroy(&kcrypt_context.mode_module_api);
+    }
+
+    if (kcrypt_context.cipher_module_api.destroy != NULL) {
+        kcrypt_context.cipher_module_api.destroy(&kcrypt_context.cipher_module_api);
+    }
 
     if (kcrypt_context.mode_lib_handle) {
         dlclose(kcrypt_context.mode_lib_handle);
