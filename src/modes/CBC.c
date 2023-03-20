@@ -103,10 +103,17 @@ int cbc_mode_decrypt_post_transform(cbc_mode_t *self,
                                     cplib_mem_chunk_t *key,
                                     enum cplib_block_position position,
                                     cplib_mem_chunk_t **out) {
-    CPLIB_UNUSED_PARAM(unpadded);
     CPLIB_UNUSED_PARAM(key);
     CPLIB_UNUSED_PARAM(position);
-    return cbc_mode_proc_data(self, processed, out);
+    int ret;
+
+    ret = cbc_mode_proc_data(self, processed, out);
+    if (!ret) {
+        LOG_DEBUG("Failed to XOR\n");
+        return ret;
+    }
+
+    return cbc_mode_store_data(self, unpadded);
 }
 
 int cbc_mode_destroy(cbc_mode_t *self) {
