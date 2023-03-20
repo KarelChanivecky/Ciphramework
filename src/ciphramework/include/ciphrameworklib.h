@@ -14,18 +14,15 @@
 /**
  *
  * TODO
- *  FRAMEWORK
- *  - RoundKeyProvider
- *  - cipher loader
- *
  *  IMPLEMENTATION
  *   - Key expansion
- *   - round function
- *   - ECB
  *   - CBC
  *   - CTR
- *   - dlsym
- *
+ *  BUG
+ *   35/2720 testing plaintext, key combination: text-len=10.txt, binary-32b-0.txt
+ *    ERROR: Failed to unpad block. ret=7
+ *      Failed to process message
+ *   KCrypt failed. Code: 7
  */
 
 // ------------------------------------------------------------------------
@@ -41,7 +38,8 @@ enum cplib_base_error_codes {
     CPLIB_ERR_ARG,
     CPLIB_ERR_OS,
     CPLIB_ERR_FILE,
-    CPLIB_ERR_EOF
+    CPLIB_ERR_EOF,
+    CPLIB_ERR_HELP,
 };
 
 enum cplib_block_position {

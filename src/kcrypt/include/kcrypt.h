@@ -60,13 +60,13 @@ typedef int (*kcrypt_get_mode_f)(int argc,
                                  const char **argv,
                                  enum cplib_proc_type process,
                                  cplib_mode_base_t **mode,
-                                 cplib_block_padder_base_t **padder);
+                                 cplib_block_padder_base_t **padder,
+                                 size_t block_iteration_size);
 
 struct kcrypt_mode_module_api_t {
     kcrypt_shared_module_api_t;
     size_t *supported_key_sizes;
     unsigned int supported_key_sizes_count;
-    kcrypt_get_output_key_size_f get_output_key_size;
     kcrypt_get_mode_f get_mode;
 };
 

@@ -5,6 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "cplib_utils.h"
 #include "cplib_log.h"
@@ -1142,6 +1144,49 @@ int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned lon
     }
 
     *result = ret;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+// ------------------------------------------------------------------------
+
+
+int cplib_read_file(const char *filepath, cplib_mem_chunk_t **file_contents) {
+    ssize_t ret;
+    int fd;
+    struct stat file_stat;
+    LOG_DEBUG("Getting file_contents from file %s\n", filepath);
+
+    fd = open(filepath, O_RDONLY);
+    if (fd == -1) {
+        LOG_DEBUG("Failed to open %s due to error: %s\n", filepath, strerror(errno));
+        return CPLIB_ERR_FILE;
+    }
+
+    ret = fstat(fd, &file_stat);
+    if (ret == -1) {
+        LOG_DEBUG("Failed to stat %s due to error: %s\n", filepath, strerror(errno));
+        return CPLIB_ERR_FILE;
+    }
+
+    *file_contents = cplib_allocate_mem_chunk(file_stat.st_size);
+    if (!*file_contents) {
+        LOG_DEBUG("Failed to allocate memory for file_contents\n");
+        return CPLIB_ERR_MEM;
+    }
+
+    LOG_VERBOSE("File size: %ld\n", file_stat.st_size);
+    ret = read(fd, (*file_contents)->mem, file_stat.st_size);
+    if (ret == -1) {
+        LOG_DEBUG("Failed to read %s due to error: %s\n", filepath, strerror(errno));
+        return CPLIB_ERR_FILE;
+    }
+
+    if (ret != file_stat.st_size) {
+        LOG_DEBUG("Failed to read file_contents from file.\n");
+    }
+
+    (*file_contents)->taken = file_stat.st_size;
 
     return CPLIB_ERR_SUCCESS;
 }

@@ -16,9 +16,11 @@ int ECB_get_mode(int argc,
                  const char **argv,
                  enum cplib_proc_type process,
                  cplib_mode_base_t **mode,
-                 cplib_block_padder_base_t **padder) {
+                 cplib_block_padder_base_t **padder,
+                 size_t block_iteration_size) {
     CPLIB_UNUSED_PARAM(argc);
     CPLIB_UNUSED_PARAM(argv);
+    CPLIB_UNUSED_PARAM(block_iteration_size);
 
     *mode = NULL;
     if (process != CPLIB_PROC_ENCRYPT && process != CPLIB_PROC_DECRYPT) {
@@ -54,7 +56,6 @@ int kcrypt_lib_init(void *lib_api) {
     if (api->struct_size == sizeof(kcrypt_mode_module_api_t)) {
         api->supported_key_sizes = supported_key_sizes;
         api->supported_key_sizes_count = 1;
-        api->get_output_key_size = ECB_get_output_key_size;
         api->get_mode = ECB_get_mode;
         api->destroy = ECB_destroy;
     }
