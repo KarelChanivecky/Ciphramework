@@ -52,7 +52,7 @@ int cplib_mem_chunk_append(struct cplib_mem_chunk_t *self, void *data, size_t si
 cplib_mem_chunk_t *cplib_create_chunk(size_t size) {
     cplib_mem_chunk_t *chunk = (cplib_mem_chunk_t *) cplib_destroyable_new(sizeof(cplib_mem_chunk_t));
     if (!chunk) {
-        LOG_DEBUG("Cannot allocate chunk of split_size %zu. Out of memory\n", size);
+        LOG_DEBUG("Cannot allocate chunk. Out of memory\n");
         return NULL;
     }
 
@@ -77,7 +77,7 @@ struct cplib_mem_chunk_t *cplib_allocate_mem_chunk(size_t size) {
     chunk->mem = (void *) cplib_malloc(size);
 
     if (!chunk->mem) {
-        LOG_DEBUG("Cannot allocate chunk of split_size %zu. Out of memory\n", size);
+        LOG_DEBUG("Cannot allocate chunk of size %zu. Out of memory\n", size);
         cplib_free(chunk);
         return NULL;
     }

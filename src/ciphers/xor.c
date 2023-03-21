@@ -8,6 +8,7 @@
 #include "cplib_log.h"
 
 static char error_text[KCRYPT_ERROR_TEXT_MAX_LENGTH] = {0};
+static cplib_block_manipulator_base_t * block_manipulator = NULL;
 
 int xor_cipher_proc_function(struct cplib_cipher_base_t *self,
                              cplib_mem_chunk_t *data,
@@ -18,20 +19,25 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *self,
     CPLIB_UNUSED_PARAM(position);
 
     int ret;
-
-    cplib_block_manipulator_base_t *block_manipulator;
     cplib_mem_chunk_t *processed;
 
-    block_manipulator = cplib_simple_block_manipulator_new();
-    if (!*processed_ptr) {
-        *processed_ptr = cplib_allocate_mem_chunk(key->taken);
-        if (!*processed_ptr) {
+    processed = *processed_ptr;
+
+    if (!block_manipulator) {
+        block_manipulator = cplib_simple_block_manipulator_new();
+    }
+
+    if (!block_manipulator) {
+        LOG_MSG("Failed to allocate memory for block manipulator\n");
+    }
+
+    if (!processed) {
+        processed = cplib_allocate_mem_chunk(key->taken);
+        if (!processed) {
             LOG_MSG("Failed to allocate memory for processed data\n");
             return CPLIB_ERR_MEM;
         }
     }
-
-    processed = *processed_ptr;
 
     if (processed->size < key->taken) {
         LOG_MSG("Passed processed counter is smaller than needed. given %zu < needed %zu\n", processed->size,
@@ -39,8 +45,13 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *self,
         return CPLIB_ERR_SIZE_MISMATCH;
     }
 
-    ret = block_manipulator->xor(block_manipulator, data, key, processed_ptr);
-    cplib_destroyable_put(block_manipulator);
+    ret = block_manipulator->xor(block_manipulator, data, key, &processed);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to XOR data with key\n");
+        return ret;
+    }
+
+    *processed_ptr = processed;
     return ret;
 }
 
@@ -106,7 +117,7 @@ int xor_cipher_get_suite(
 
 int xor_cipher_module_destroy(kcrypt_shared_module_api_t *cipher_module) {
     CPLIB_UNUSED_PARAM(cipher_module);
-
+    CPLIB_PUT_IF_EXISTS(block_manipulator);
     return CPLIB_ERR_SUCCESS;
 }
 

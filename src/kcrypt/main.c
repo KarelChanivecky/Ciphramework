@@ -415,6 +415,24 @@ int process_parsed_args(void) {
         message->taken--;
     }
 
+    if (options.input_path) {
+        input_fd = open(options.input_path, O_RDONLY);
+        if (input_fd == -1) {
+            LOG_MSG("Failed to open input file %s\n", options.input_path);
+            ret = CPLIB_ERR_FILE;
+            goto error_cleanup;
+        }
+    } else if (!options.message) {
+        LOG_DEBUG("Reading message from stdin\n");
+        input_fd = STDIN_FILENO;
+    }
+
+    if (!message && input_fd == CPLIB_INVALID_FD) {
+        LOG_MSG("Must provide a message file or message in cli arguments\n");
+        ret = CPLIB_ERR_ARG;
+        goto error_cleanup;
+    }
+
     if (!options.key_path && !options.key) {
         print_usage();
         ret = CPLIB_ERR_ARG;
@@ -469,17 +487,7 @@ int process_parsed_args(void) {
         goto error_cleanup;
     }
 
-    if (options.input_path) {
-        input_fd = open(options.input_path, O_RDONLY);
-        if (input_fd == -1) {
-            LOG_MSG("Failed to open input file %s\n", options.input_path);
-            ret = CPLIB_ERR_FILE;
-            goto error_cleanup;
-        }
-    } else if (!options.message) {
-        LOG_DEBUG("Reading message from stdin\n");
-        input_fd = STDIN_FILENO;
-    }
+
 
     block_to_key_ratio = kcrypt_context.cipher_module_api.block_to_key_size_ratio;
     kcrypt_context.block_size = block_to_key_ratio * kcrypt_context.key_size;
@@ -493,6 +501,7 @@ int process_parsed_args(void) {
         LOG_MSG("Failed to get block iterator. code: %d\n", ret);
         goto error_cleanup;
     }
+
 
     ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
                                                   (const char **) kcrypt_context.mode_argv,
@@ -538,6 +547,8 @@ int process_parsed_args(void) {
 
 
     LOG_DEBUG("Arguments processed successfully\n");
+    CPLIB_PUT_IF_EXISTS(message);
+
     return CPLIB_ERR_SUCCESS;
 
     error_cleanup:
@@ -796,3 +807,5 @@ int main(int argc, char **argv) {
 
     return ret;
 }
+
+// TODO NULL check failing for some reason. Also, memory leak in parse args message var. allocd block iterator should split lazily

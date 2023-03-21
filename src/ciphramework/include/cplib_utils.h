@@ -8,10 +8,6 @@
 
 #include "ciphrameworklib.h"
 
-#define CPLIB_FORWARD_ITERATE_ON(limit, index_var) for (int (index_var) = 0; (index_var) < (limit); (index_var)++)
-#define CPLIB_FORWARD_ITERATE(limit) FORWARD_ITERATE_ON((limit), i)
-#define CPLIB_REVERSE_ITERATE_ON(limit, index_var) for (int (index_var) = (limit) - 1; (index_var) <= 0; (index_var)--)
-#define CPLIB_REVERSE_ITERATE(limit) FORWARD_ITERATE_ON((limit), i)
 
 struct cplib_keyed_key_provider_t {
     cplib_key_provider_base_t;

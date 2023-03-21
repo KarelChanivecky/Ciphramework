@@ -76,7 +76,7 @@ int round_cipher_process(
     cplib_cipher_base_t *cipher = NULL;
     cplib_mem_chunk_t *key = NULL;
     key_provider = self->key_provider_factory->from(self->key_provider_factory, root_key);
-    cplib_cipher_base_t * next = NULL;
+    cplib_cipher_base_t *next = NULL;
 
     if (!key_provider) {
         return CPLIB_ERR_MEM;
@@ -109,7 +109,7 @@ int round_cipher_process(
             goto cleanup;
         }
 
-        ret = cipher->process((cplib_destroyable_t *)cipher, data, key, position, processed);
+        ret = cipher->process((cplib_destroyable_t *) cipher, data, key, position, processed);
         if (ret != CPLIB_ERR_SUCCESS) {
             goto cleanup;
         }
@@ -202,7 +202,7 @@ int cplib_feistel_cipher_round(
     cplib_mem_chunk_t **plaintext_halves = NULL; // chunks themselves are allocated by split
     cplib_mem_chunk_t *ciphertext_halves[2] = {0};
     cplib_mem_chunk_t *round_function_result;
-    cplib_mem_chunk_t * swap_temp = NULL;
+    cplib_mem_chunk_t *swap_temp = NULL;
 
     plaintext_halves = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 2);
     if (!plaintext_halves) {
@@ -379,12 +379,12 @@ struct feistel_cipher_factory_context_t {
     cplib_destroyable_t;
     enum cplib_proc_type process;
     cplib_process_f round_function;
-    cplib_destroyable_t * round_function_self;
+    cplib_destroyable_t *round_function_self;
 };
 
 typedef struct feistel_cipher_factory_context_t feistel_cipher_factory_context_t;
 
-int destroy_feistel_cipher_factory_context(feistel_cipher_factory_context_t * self) {
+int destroy_feistel_cipher_factory_context(feistel_cipher_factory_context_t *self) {
     LOG_VERBOSE("Destroying feistel_cipher_factory_context_t %p\n", (void *) self);
 
     CPLIB_PUT_IF_EXISTS(self->round_function_self);
@@ -397,7 +397,7 @@ int destroy_feistel_cipher_factory_context(feistel_cipher_factory_context_t * se
 cplib_feistel_cipher_t *allocate_feistel_cipher(cplib_cipher_factory_base_t *self) {
 
     feistel_cipher_factory_context_t *ctx;
-    cplib_block_manipulator_base_t * block_manipulator;
+    cplib_block_manipulator_base_t *block_manipulator;
 
     ctx = (feistel_cipher_factory_context_t *) self->context;
 
@@ -418,7 +418,7 @@ cplib_feistel_cipher_t *allocate_feistel_cipher(cplib_cipher_factory_base_t *sel
 }
 
 cplib_cipher_factory_base_t *
-cplib_feistel_cipher_factory_new(cplib_process_f round_function, cplib_destroyable_t * round_function_self) {
+cplib_feistel_cipher_factory_new(cplib_process_f round_function, cplib_destroyable_t *round_function_self) {
 
     cplib_cipher_factory_base_t *feistel_cipher_factory = cplib_cipher_factory_new(
             (cplib_cipher_base_allocator_f) allocate_feistel_cipher);
@@ -820,9 +820,9 @@ cplib_file_writer_t *cplib_file_writer_new(int fd) {
 
 struct allocated_block_iterator_context_t {
     cplib_destroyable_t;
-    cplib_mem_chunk_t **chunks;
-    unsigned int chunk_count;
-    unsigned int next_chunk;
+    cplib_mem_chunk_t *buffer;
+    size_t buffer_index;
+    size_t partition_size;
 };
 
 typedef struct allocated_block_iterator_context_t allocated_block_iterator_context_t;
@@ -830,13 +830,11 @@ typedef struct allocated_block_iterator_context_t allocated_block_iterator_conte
 int destroy_allocated_block_iterator_context(allocated_block_iterator_context_t *ctx) {
     LOG_VERBOSE("Destroying allocated_block_iterator_context_t %p\n", (void *) ctx);
 
-    cplib_mem_chunk_t *chunk;
 
-    for (unsigned int i = 0; i < ctx->chunk_count; i++) {
-        chunk = ctx->chunks[i];
-        cplib_destroyable_put(chunk);
-    }
-    cplib_free(ctx->chunks);
+    CPLIB_PUT_IF_EXISTS(ctx->buffer);
+    ctx->buffer_index = 0;
+    ctx->partition_size = 0;
+    ctx->destroy = NULL;
     cplib_free(ctx);
     return CPLIB_ERR_SUCCESS;
 }
@@ -847,6 +845,9 @@ int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_c
     cplib_mem_chunk_t *next;
     int ret;
     int empty;
+    uint8_t *mem;
+    size_t remainder;
+    size_t take_up;
 
     ctx = (allocated_block_iterator_context_t *) self->context;
 
@@ -859,41 +860,64 @@ int block_allocated_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_c
         return CPLIB_ERR_ITER_OVERFLOW;
     }
 
-    next = ctx->chunks[ctx->next_chunk];
-    *next_ptr = next;
-    cplib_destroyable_hold(next);
+    next = *next_ptr;
+    if (!next) {
+        next = cplib_allocate_mem_chunk(ctx->partition_size);
+    }
 
-    ctx->next_chunk++;
+    if (!next) {
+        LOG_DEBUG("Failed to allocate chunk for data\n");
+        return CPLIB_ERR_MEM;
+    }
+
+    remainder = ctx->buffer->taken - ctx->buffer_index;
+    take_up = remainder < ctx->partition_size ? remainder : ctx->partition_size;
+
+    if (next->size < take_up) {
+        LOG_MSG("Data buffer is too small\n");
+        return CPLIB_ERR_SIZE_MISMATCH;
+    }
+
+    mem = ctx->buffer->mem;
+    next->append(next, mem + ctx->buffer_index, take_up);
+    ctx->buffer_index += take_up;
+
+    *next_ptr = next;
+
     return CPLIB_ERR_SUCCESS;
 }
 
 int block_allocated_iterator_is_empty(cplib_block_iterator_base_t *self, int *result) {
     allocated_block_iterator_context_t *ctx = (allocated_block_iterator_context_t *) self->context;
-    *result = ctx->next_chunk >= ctx->chunk_count;
+    *result = ctx->buffer_index >= ctx->buffer->taken;
     return CPLIB_ERR_SUCCESS;
 }
 
 
 cplib_block_iterator_base_t *cplib_allocated_block_iterator_new(cplib_mem_chunk_t *data, size_t iterated_size) {
-    int ret;
     cplib_block_iterator_base_t *block_iterator;
     allocated_block_iterator_context_t *ctx;
+    cplib_mem_chunk_t *allocated_data;
+
+    allocated_data = cplib_mem_chunk_new(data->mem, data->taken);
+    if (!allocated_data) {
+        LOG_DEBUG("Failed to allocate memory for data buffer\n");
+        return NULL;
+    }
 
     ctx = (allocated_block_iterator_context_t *) cplib_destroyable_new(
             sizeof(struct allocated_block_iterator_context_t));
     if (!ctx) {
         LOG_DEBUG("Failed to allocate block iterator context\n");
+        cplib_destroyable_put(allocated_data);
         return NULL;
     }
 
     ctx->destroy = (cplib_independent_mutator_f) destroy_allocated_block_iterator_context;
-    ret = cplib_block_split(NULL, data, iterated_size, &ctx->chunks, &ctx->chunk_count);
-    if (ret != CPLIB_ERR_SUCCESS) {
-        LOG_DEBUG("Failed to split block\n");
-    }
 
-    ctx->next_chunk = 0;
-
+    ctx->buffer = allocated_data;
+    ctx->partition_size = iterated_size;
+    ctx->buffer_index = 0;
 
     block_iterator = cplib_block_iterator_new(
             (cplib_next_item_f) block_allocated_iterator_next,
@@ -1011,12 +1035,21 @@ int cplib_file_block_iterator_is_empty(cplib_block_iterator_base_t *self, int *r
 int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_chunk_t **block) {
     int ret;
     file_block_iterator_context_t *ctx;
-    cplib_mem_chunk_t *partial;
+    cplib_mem_chunk_t *temp;
     int inner_iterator_empty;
 
-    partial = NULL;
-
+    temp = *block;
     ctx = (file_block_iterator_context_t *) self->context;
+
+    if (!temp) {
+        temp = cplib_allocate_mem_chunk(ctx->iterated_size);
+    }
+
+    if (!temp) {
+        LOG_MSG("Failed to allocate memory for block\n");
+        return CPLIB_ERR_MEM;
+    }
+
 
     if (ctx->allocated_iterator) {
         ret = ctx->allocated_iterator->is_empty(ctx->allocated_iterator, &inner_iterator_empty);
@@ -1025,67 +1058,69 @@ int cplib_file_block_iterator_next(cplib_block_iterator_base_t *self, cplib_mem_
         }
 
         if (!inner_iterator_empty) {
-            ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) block);
+            ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) &temp);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_DEBUG("Failed to get next block from iterator.\n");
                 return ret;
             }
 
-            if ((*block)->taken == ctx->iterated_size) {
+            if (temp->taken == ctx->iterated_size) {
+                *block = temp;
                 return CPLIB_ERR_SUCCESS;
             }
 
             if (ctx->got_eof) {
                 // Here we are really done.
+                *block = temp;
                 return CPLIB_ERR_SUCCESS;
             }
 
-            partial_block_remaining:
-            partial = *block;
         }
 
+        partial_block_remaining:
         // no longer has data
-        cplib_destroyable_put(ctx->allocated_iterator);
-        ctx->allocated_iterator = NULL;
+        CPLIB_PUT_IF_EXISTS(ctx->allocated_iterator);
     }
 
-    if (partial) {
-        ctx->buffer->recycle(ctx->buffer, partial->mem, partial->taken);
+
+    if (temp) {
+        // this is a partial block. We put the data back in the buffer
+        // so when reading from fd we append to it. Then the partial data and
+        // the new data is all put in an allocated iterator from which the data
+        // can be retrieved again.
+        ctx->buffer->recycle(ctx->buffer, temp->mem, temp->taken);
     }
 
     ret = take_up_from_file(ctx);
     if (ret == CPLIB_ERR_EOF) {
-        if (partial) {
+        // However, it is possible that now we get EOF, in this case it doesn't make sense to use
+        // a new allocated iterator, instead we just return what we have.
+        if (temp) {
+            *block = temp;
             return CPLIB_ERR_SUCCESS;
         }
-        *block = NULL;
-        partial = NULL;
         return CPLIB_ERR_ITER_OVERFLOW;
     }
+
+    // At this point, we are certain of not EOF, and we are going to reuse the whole temp chunk
+    temp->taken = 0;
+
     if (ret != CPLIB_ERR_SUCCESS) {
         return ret;
     }
-
-    /*
-     * This data will be gotten from the allocated iterator.
-     * However, we cannot free before this point because we
-     * first must know if we have reached EOF. In which case,
-     * this would be the only remaining data.
-     */
-    CPLIB_PUT_IF_EXISTS(partial);
-    partial = NULL;
-
-    ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) block);
+    ret = ctx->allocated_iterator->next(ctx->allocated_iterator, (void **) &temp);
 
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Failed to get next block from iterator.\n");
         return ret;
     }
 
-    if ((*block)->taken == ctx->iterated_size) {
+    if (temp->taken == ctx->iterated_size) {
+        *block = temp;
         return CPLIB_ERR_SUCCESS;
     }
 
+    // in this case we read some new data, but still is incomplete. We need to read again
     goto partial_block_remaining;
 }
 
@@ -1133,10 +1168,10 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
 
 // ------------------------------------------------------------------------
 
-int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned long long * result) {
+int cplib_safe_strtoull(const char *nptr, char **endptr, int base, unsigned long long *result) {
     unsigned long long ret;
 
-    ret =  strtoull(nptr, endptr, base);
+    ret = strtoull(nptr, endptr, base);
 
     if (errno != 0) {
         LOG_DEBUG("strtoull failed: %s\n", strerror(errno));
