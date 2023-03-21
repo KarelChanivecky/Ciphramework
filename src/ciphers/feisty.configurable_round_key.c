@@ -59,7 +59,7 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
     processed = *processed_ptr;
 
     if (processed->size < key->taken) {
-        LOG_DEBUG("Passed processed buffer is smaller than needed. given %zu < needed %zu\n", processed->size,
+        LOG_DEBUG("Passed processed counter is smaller than needed. given %zu < needed %zu\n", processed->size,
                   key->taken);
         ret = CPLIB_ERR_SIZE_MISMATCH;
         goto cleanup;
@@ -339,7 +339,7 @@ static char *help_text =
         "\n"
         "-d use default round keys. Ignore kcrypt -l or -k arg. Note that for decryption the given round keys will be reversed.\n"
         "   In other words, the keys must be provided in the same order as they were given to the encryption process\n"
-        "-r <round key 1> <round key 2> <round key ..> <round key 8>: Specify round keys. Ignore kcrypt -l or -k arg.\n"
+        "-r <round key 1> <round key 2> <round key ..> <round key 8>: Specify round keys in hexadecimal. Ignore kcrypt -l or -k arg.\n"
         "If -r or -d are not provided will generate round keys based off the kcrypt arg -k or -l\n"
         "Supported modes: [" KCRYPT_MODE_ANY "]\n"
         "Supported key sizes: [32b]\n";

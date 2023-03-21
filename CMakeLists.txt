@@ -83,6 +83,14 @@ add_library(
 target_compile_options(CBC PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
 target_link_libraries(CBC ciphramework)
 
+add_library(
+        CTR SHARED
+        src/modes/CTR.c
+)
+
+target_compile_options(CTR PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_link_libraries(CTR ciphramework)
+
 # KCRYPT
 add_executable(
         kcrypt
@@ -101,4 +109,5 @@ add_dependencies(
         feisty.configurable_round_key
         xor
         ECB
-        CBC)
+        CBC
+        CTR)

@@ -36,7 +36,7 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
     processed = *processed_ptr;
 
     if (processed->size < key->taken) {
-        LOG_MSG("Passed processed buffer is smaller than needed. given %zu < needed %zu\n", processed->size,
+        LOG_MSG("Passed processed counter is smaller than needed. given %zu < needed %zu\n", processed->size,
                 key->taken);
         ret = CPLIB_ERR_SIZE_MISMATCH;
         goto cleanup;

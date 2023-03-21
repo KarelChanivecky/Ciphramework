@@ -15,14 +15,16 @@ size_t ECB_get_output_key_size(size_t input_key_size) {
 int ECB_get_mode(int argc,
                  const char **argv,
                  enum cplib_proc_type process,
+                 size_t block_iteration_size,
                  cplib_mode_base_t **mode,
                  cplib_block_padder_base_t **padder,
-                 size_t block_iteration_size) {
+                 enum cplib_proc_type *effective_process) {
     CPLIB_UNUSED_PARAM(argc);
     CPLIB_UNUSED_PARAM(argv);
     CPLIB_UNUSED_PARAM(block_iteration_size);
 
     *mode = NULL;
+    *effective_process = process;
     if (process != CPLIB_PROC_ENCRYPT && process != CPLIB_PROC_DECRYPT) {
         LOG_DEBUG("Invalid process type\n");
         return CPLIB_ERR_ARG;

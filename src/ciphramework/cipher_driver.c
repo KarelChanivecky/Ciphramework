@@ -25,8 +25,11 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     cplib_block_padder_base_t *block_padder;
     cplib_mode_base_t *mode;
     cplib_writer_base_t *writer;
-    size_t cur_block_size;
     size_t expected_block_size;
+    size_t cur_block_size;
+
+    // shush compiler warning in release build
+    (void) cur_block_size;
 
     expected_block_size = self->block_size;
     block_iterator = self->block_iterator;

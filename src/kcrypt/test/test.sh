@@ -1,5 +1,16 @@
 #!/bin/bash
 
+cipher=${xor:-$1}
+cipher_args=$2
+mode=$3
+mode_args=$4
+mode=${mode:+"-d $mode"}
+
+echo CIPHER=$cipher
+echo CIPHER_ARGS=$cipher_args
+echo MODE=$mode
+echo MODE_ARGS=$mode_args
+
 set -o pipefail
 
 EXE=./build/kcrypt
@@ -22,6 +33,11 @@ let total_tests=$((key_count * pt_count))
 
 echo total_tests: $total_tests
 
+function wait_on_error() {
+    read
+    echo -en "\033[1A\033[2K"
+}
+
 for key_path in "${key_paths[@]}"; do
   for plaintext_path in "${plaintext_paths[@]}"; do
     ((index++))
@@ -29,21 +45,24 @@ for key_path in "${key_paths[@]}"; do
     plaintext_name="$(basename "${plaintext_path}")"
     cipher_path="./encrypted/$plaintext_name-$key_name.kcrypt"
     decrypted_path="./decrypted/$plaintext_name"
-    iv_path="./iv/binary-64b-16891392968528426633.txt"
     echo "$index/$total_tests testing plaintext, key combination: $plaintext_name, $key_name"
-    $EXE feisty.configurable_round_key -p e -l $key_path -d CBC -f $plaintext_path -o $cipher_path -- CIPHER -d -- MODE -f $iv_path
-    if [ $? -ne 0 ]
+    $EXE $cipher -p e -l $key_path $mode -f $plaintext_path -o $cipher_path $cipher_args $mode_args
+    ret=$?
+    if [ $ret -ne 0 ]
     then
-       echo "TEST FAILED: encryption failed"
+       echo "TEST FAILED: encryption failed: $ret"
        ((failed_tests++))
-       continue
+        wait_on_error
+        continue
     fi
 
-    $EXE feisty.configurable_round_key -p d -l $key_path -d CBC -f $cipher_path -o $decrypted_path -- CIPHER -d -- MODE -f $iv_path
-    if [ $? -ne 0 ]
+    $EXE $cipher -p d -l $key_path $mode -f $cipher_path -o $decrypted_path $cipher_args $mode_args
+    ret=$?
+    if [ $ret -ne 0 ]
     then
-      echo "TEST FAILED: decryption failed"
+      echo "TEST FAILED: decryption failed: $ret"
       ((failed_tests++))
+      wait_on_error
       continue
     fi
 
@@ -55,7 +74,7 @@ for key_path in "${key_paths[@]}"; do
       echo "TEST PASSED: $plaintext_sha == $decrypted_sha"
     else
       echo "TEST FAILED: Decrypted != plaintext: $plaintext_sha == $decrypted_sha"
-      read
+      wait_on_error
       ((failed_tests++))
     fi
   done

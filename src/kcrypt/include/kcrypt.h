@@ -59,9 +59,10 @@ typedef size_t (*kcrypt_get_output_key_size_f)(size_t input_key_size);
 typedef int (*kcrypt_get_mode_f)(int argc,
                                  const char **argv,
                                  enum cplib_proc_type process,
+                                 size_t block_iteration_size,
                                  cplib_mode_base_t **mode,
                                  cplib_block_padder_base_t **padder,
-                                 size_t block_iteration_size);
+                                 enum cplib_proc_type *effective_process);
 
 struct kcrypt_mode_module_api_t {
     kcrypt_shared_module_api_t;
@@ -79,6 +80,7 @@ typedef int(*kcrypt_lib_api_init_f)(void *lib_api);
 #define KCRYPT_MODE_ECB "ECB"
 #define KCRYPT_MODE_CBC "CBC"
 #define KCRYPT_MODE_CTR "CTR"
+#define KCRYPT_MODE_GCM "GCM"
 #define KCRYPT_MODE_OFB "OFB"
 #define KCRYPT_MODE_CFB "CFB"
 

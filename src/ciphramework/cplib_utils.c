@@ -1114,7 +1114,7 @@ cplib_block_iterator_base_t *cplib_file_block_iterator_new(int fd,
 
     buffer = cplib_allocate_mem_chunk(buffer_size);
     if (!buffer) {
-        LOG_DEBUG("Failed to allocate memory for read buffer for file.\n");
+        LOG_DEBUG("Failed to allocate memory for read counter for file.\n");
         cplib_destroyable_put(ctx);
         cplib_destroyable_put(file_iterator);
         return NULL;
@@ -1144,7 +1144,6 @@ int cplib_safe_strtoull(const char *nptr, char ** endptr, int base, unsigned lon
     }
 
     *result = ret;
-
     return CPLIB_ERR_SUCCESS;
 }
 

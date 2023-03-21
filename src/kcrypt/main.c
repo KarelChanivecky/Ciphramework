@@ -408,6 +408,7 @@ int process_parsed_args(void) {
     int output_fd = CPLIB_INVALID_FD;
     size_t block_to_key_ratio;
     cplib_mem_chunk_t *message = NULL;
+    enum cplib_proc_type effective_process;
 
     if (options.message) {
         message = cplib_mem_chunk_str_new(options.message);
@@ -493,6 +494,29 @@ int process_parsed_args(void) {
         goto error_cleanup;
     }
 
+    ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
+                                                  (const char **) kcrypt_context.mode_argv,
+                                                  options.process,
+                                                  kcrypt_context.block_size,
+                                                  &kcrypt_context.mode,
+                                                  &kcrypt_context.padder,
+                                                  &effective_process);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("Failed to initialize mode\n");
+        if (ret == CPLIB_ERR_ARG) {
+            print_lib_usage(KCRYPT_MODE_LIB_DIR, options.mode);
+        }
+        goto error_cleanup;
+    }
+
+#ifdef CPLIB_DEBUG
+    if (options.process != effective_process) {
+        LOG_DEBUG("Mode forced process: %d\n", effective_process);
+    }
+#endif
+
+    options.process = effective_process;
+
     ret = kcrypt_context.cipher_module_api.get_cipher(kcrypt_context.cipher_argc,
                                                       (const char **) kcrypt_context.cipher_argv,
                                                       options.process,
@@ -512,31 +536,39 @@ int process_parsed_args(void) {
         goto error_cleanup;
     }
 
-    ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
-                                                  (const char **) kcrypt_context.mode_argv,
-                                                  options.process,
-                                                  &kcrypt_context.mode,
-                                                  &kcrypt_context.padder,
-                                                  kcrypt_context.block_size);
-    if (ret != CPLIB_ERR_SUCCESS) {
-        LOG_MSG("Failed to initialize mode\n");
-        if (ret == CPLIB_ERR_ARG) {
-            print_lib_usage(KCRYPT_MODE_LIB_DIR, options.mode);
-        }
-        goto error_cleanup;
-    }
 
     LOG_DEBUG("Arguments processed successfully\n");
     return CPLIB_ERR_SUCCESS;
 
     error_cleanup:
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.cipher_factory);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.key_provider);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.padder);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.mode);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.writer);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.block_iterator);
-    CPLIB_PUT_IF_EXISTS(kcrypt_context.key);
+    if (*(&kcrypt_context.cipher_factory)) {
+        cplib_destroyable_put(kcrypt_context.cipher_factory);
+        kcrypt_context.cipher_factory = NULL;
+    }
+    if (*(&kcrypt_context.key_provider)) {
+        cplib_destroyable_put(kcrypt_context.key_provider);
+        kcrypt_context.key_provider = NULL;
+    }
+    if (*(&kcrypt_context.padder)) {
+        cplib_destroyable_put(kcrypt_context.padder);
+        kcrypt_context.padder = NULL;
+    }
+    if (*(&kcrypt_context.mode)) {
+        cplib_destroyable_put(kcrypt_context.mode);
+        kcrypt_context.mode = NULL;
+    }
+    if (*(&kcrypt_context.writer)) {
+        cplib_destroyable_put(kcrypt_context.writer);
+        kcrypt_context.writer = NULL;
+    }
+    if (*(&kcrypt_context.block_iterator)) {
+        cplib_destroyable_put(kcrypt_context.block_iterator);
+        kcrypt_context.block_iterator = NULL;
+    }
+    if (*(&kcrypt_context.key)) {
+        cplib_destroyable_put(kcrypt_context.key);
+        kcrypt_context.key = NULL;
+    }
     CPLIB_PUT_IF_EXISTS(message);
 
     return ret;
@@ -697,6 +729,7 @@ int main(int argc, char **argv) {
     int ret;
     init_options();
     init_context();
+    char *error_text;
 
     ret = parse_args(argc, argv);
     if (ret != CPLIB_ERR_SUCCESS) {
@@ -723,6 +756,23 @@ int main(int argc, char **argv) {
     }
 
     cleanup:
+
+    if (kcrypt_context.mode_module_api.get_error_text != NULL) {
+        error_text = kcrypt_context.mode_module_api.get_error_text(
+                (struct kcrypt_shared_module_api_t *) &kcrypt_context.mode_module_api);
+        if (error_text[0] != 0) {
+            LOG_MSG("Mode: %s\n", error_text);
+        }
+    }
+
+
+    if (kcrypt_context.cipher_module_api.get_error_text != NULL) {
+        error_text = kcrypt_context.cipher_module_api.get_error_text(
+                (struct kcrypt_shared_module_api_t *) &kcrypt_context.cipher_module_api);
+        if (error_text[0] != 0) {
+            LOG_MSG("Cipher: %s\n", error_text);
+        }
+    }
 
     if (kcrypt_context.mode_module_api.destroy != NULL) {
         kcrypt_context.mode_module_api.destroy(&kcrypt_context.mode_module_api);

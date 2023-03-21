@@ -40,6 +40,8 @@ enum cplib_base_error_codes {
     CPLIB_ERR_FILE,
     CPLIB_ERR_EOF,
     CPLIB_ERR_HELP,
+    CPLIB_ERR_OVERFLOW,
+    CPLIB_ERR_UNDERFLOW,
 };
 
 enum cplib_block_position {

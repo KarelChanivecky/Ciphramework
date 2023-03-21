@@ -34,7 +34,7 @@ int xor_cipher_proc_function(struct cplib_cipher_base_t *self,
     processed = *processed_ptr;
 
     if (processed->size < key->taken) {
-        LOG_MSG("Passed processed buffer is smaller than needed. given %zu < needed %zu\n", processed->size,
+        LOG_MSG("Passed processed counter is smaller than needed. given %zu < needed %zu\n", processed->size,
                 key->taken);
         return CPLIB_ERR_SIZE_MISMATCH;
     }
