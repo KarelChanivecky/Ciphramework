@@ -502,6 +502,7 @@ int process_parsed_args(void) {
         goto error_cleanup;
     }
 
+
     ret = kcrypt_context.mode_module_api.get_mode(kcrypt_context.mode_argc,
                                                   (const char **) kcrypt_context.mode_argv,
                                                   options.process,
@@ -804,3 +805,5 @@ int main(int argc, char **argv) {
 
     return ret;
 }
+
+// TODO NULL check failing for some reason. Also, memory leak in parse args message var. allocd block iterator should split lazily

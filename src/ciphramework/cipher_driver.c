@@ -50,7 +50,9 @@ int evaluate_padding(cplib_cipher_driver_t *driver,
     int ret;
 
     cplib_mem_chunk_t *p;
+    cplib_mem_chunk_t *e;
 
+    e = *extra;
     p = *padded;
 
     if (driver->block_padder && driver->block_padder->pad && empty && !*extra) {
@@ -63,7 +65,7 @@ int evaluate_padding(cplib_cipher_driver_t *driver,
         LOG_VERBOSE("Padded\n");
 
     } else {
-        if (*extra) {
+        if (e) {
             *extra = NULL;
         }
 
@@ -296,7 +298,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             processed->taken = 0;
             post_modded->taken = 0;
             unpadded->taken = 0;
-        } while (extra); // if we have an extra block we need to process that before moving on
+        } while (extra != NULL); // if we have an extra block we need to process that before moving on
 
     }
 
