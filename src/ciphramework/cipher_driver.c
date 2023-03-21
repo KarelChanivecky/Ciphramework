@@ -138,7 +138,7 @@ int evaluate_post_cipher_mode(cplib_cipher_driver_t *driver,
         }
 
         pm->recycle(pm, processed->mem, processed->taken);
-        
+
     } else {
         ret = driver->mode->post_cipher_transform(driver->mode, processed, block, key, driver->block_position, &pm);
         if (ret != CPLIB_ERR_SUCCESS) {
@@ -152,7 +152,7 @@ int evaluate_post_cipher_mode(cplib_cipher_driver_t *driver,
     return CPLIB_ERR_SUCCESS;
 }
 
-int evaluate_unpadding(cplib_cipher_driver_t *driver, 
+int evaluate_unpadding(cplib_cipher_driver_t *driver,
                        int empty,
                        cplib_mem_chunk_t * post_modded,
                        cplib_mem_chunk_t ** unpadded) {
@@ -160,7 +160,7 @@ int evaluate_unpadding(cplib_cipher_driver_t *driver,
     cplib_mem_chunk_t * u;
 
     u = *unpadded;
-    
+
     if (driver->block_padder && driver->block_padder->unpad && empty) {
         ret = driver->block_padder->unpad(driver->block_padder, post_modded, &u);
         if (ret != CPLIB_ERR_SUCCESS) {
