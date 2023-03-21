@@ -8,34 +8,203 @@
 #include "cplib_log.h"
 
 
+int set_to_process_message(cplib_cipher_driver_t *driver,
+                           cplib_cipher_base_t **cipher,
+                           cplib_mem_chunk_t **key,
+                           int *empty) {
+    int ret;
+    cplib_cipher_base_t *c;
+
+    c = driver->cipher_factory->allocate(driver->cipher_factory);
+    if (!cipher) {
+        LOG_MSG("Failed to allocate cipher.\n");
+        return CPLIB_ERR_MEM;
+    }
+
+    c->initialize(c, driver->_cipher);
+    CPLIB_PUT_IF_EXISTS(driver->_cipher);
+    driver->_cipher = c;
+    *cipher = c;
+
+
+    ret = driver->block_iterator->is_empty(driver->block_iterator, empty);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
+        return ret;
+    }
+
+    ret = driver->key_provider->next(driver->key_provider, (void **) key);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_MSG("ERROR: Failed to get key. ret=%d\n", ret);
+        return ret;
+    }
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+int evaluate_padding(cplib_cipher_driver_t *driver,
+                     int empty,
+                     cplib_mem_chunk_t *block,
+                     cplib_mem_chunk_t **extra,
+                     cplib_mem_chunk_t **padded) {
+    int ret;
+
+    cplib_mem_chunk_t *p;
+
+    p = *padded;
+
+    if (driver->block_padder && driver->block_padder->pad && empty && !*extra) {
+
+        ret = driver->block_padder->pad(driver->block_padder, block, driver->block_size, &p, extra);
+        if (ret != CPLIB_ERR_SUCCESS) {
+            LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
+            return ret;
+        }
+        LOG_VERBOSE("Padded\n");
+
+    } else {
+        if (*extra) {
+            *extra = NULL;
+        }
+
+        if (!p) {
+            p = cplib_allocate_mem_chunk(block->size);
+        }
+
+        if (!p) {
+            LOG_MSG("ERROR: Out of memory\n");
+            return CPLIB_ERR_MEM;
+        }
+        p->recycle(p, block->mem, block->taken);
+    }
+
+    *padded = p;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+int evaluate_pre_cipher_mode(cplib_cipher_driver_t *driver,
+                             cplib_mem_chunk_t *key,
+                             cplib_mem_chunk_t *padded,
+                             cplib_mem_chunk_t **pre_modded) {
+    int ret;
+    cplib_mem_chunk_t *pm;
+
+    pm = *pre_modded;
+    if (!driver->mode) {
+        if (!pm) {
+            pm = cplib_allocate_mem_chunk(padded->size);
+        }
+
+        if (!pm) {
+            LOG_MSG("ERROR: Out of memory\n");
+            return CPLIB_ERR_MEM;
+        }
+
+        pm->recycle(pm, padded->mem, padded->taken);
+    } else {
+        ret = driver->mode->pre_cipher_transform(driver->mode, padded, key, driver->block_position, &pm);
+        if (ret != CPLIB_ERR_SUCCESS) {
+            LOG_MSG("ERROR: Failed to apply pre-cipher mode transform. ret=%d\n", ret);
+            return ret;
+        }
+        LOG_VERBOSE("Pre-modded\n");
+    }
+
+    *pre_modded = pm;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
+int evaluate_post_cipher_mode(cplib_cipher_driver_t *driver,
+                              cplib_mem_chunk_t *key,
+                              cplib_mem_chunk_t *block,
+                              cplib_mem_chunk_t *processed,
+                              cplib_mem_chunk_t **post_modded) {
+    int ret;
+    cplib_mem_chunk_t *pm;
+
+    pm = *post_modded;
+
+    if (!driver->mode) {
+        if (!pm) {
+            pm = cplib_allocate_mem_chunk(processed->size);
+        }
+
+        if (!pm) {
+            LOG_MSG("ERROR: Out of memory\n");
+            return CPLIB_ERR_MEM;
+        }
+
+        pm->recycle(pm, processed->mem, processed->taken);
+        
+    } else {
+        ret = driver->mode->post_cipher_transform(driver->mode, processed, block, key, driver->block_position, &pm);
+        if (ret != CPLIB_ERR_SUCCESS) {
+            LOG_MSG("ERROR: Failed to apply post-cipher mode transform. ret=%d\n", ret);
+            return ret;
+        }
+        LOG_VERBOSE("Post-modded\n");
+    }
+
+    *post_modded = pm;
+    return CPLIB_ERR_SUCCESS;
+}
+
+int evaluate_unpadding(cplib_cipher_driver_t *driver, 
+                       int empty,
+                       cplib_mem_chunk_t * post_modded,
+                       cplib_mem_chunk_t ** unpadded) {
+    int ret;
+    cplib_mem_chunk_t * u;
+
+    u = *unpadded;
+    
+    if (driver->block_padder && driver->block_padder->unpad && empty) {
+        ret = driver->block_padder->unpad(driver->block_padder, post_modded, &u);
+        if (ret != CPLIB_ERR_SUCCESS) {
+            LOG_MSG("ERROR: Failed to unpad block. ret=%d\n", ret);
+            return ret;
+        }
+        LOG_VERBOSE("Unpadded\n");
+    } else {
+        if (!u) {
+            u = cplib_allocate_mem_chunk(post_modded->size);
+        }
+
+        if (!u) {
+            LOG_MSG("ERROR: Out of memory\n");
+            return CPLIB_ERR_MEM;
+        }
+
+        u->recycle(u, post_modded->mem, post_modded->taken);
+    }
+
+    *unpadded = u;
+
+    return CPLIB_ERR_SUCCESS;
+}
+
 int cipher_driver_run(cplib_cipher_driver_t *self) {
     int empty = 0;
     int ret;
+    size_t cur_block_size;
+    cplib_mem_chunk_t *key = NULL;
+    cplib_block_iterator_base_t *block_iterator = NULL;
+    cplib_writer_base_t *writer = NULL;
+    cplib_cipher_base_t *cipher = NULL;
+    cplib_mem_chunk_t *extra = NULL;
     cplib_mem_chunk_t *block = NULL;
     cplib_mem_chunk_t *padded = NULL;
     cplib_mem_chunk_t *pre_modded = NULL;
-    cplib_mem_chunk_t *extra = NULL;
     cplib_mem_chunk_t *processed = NULL;
     cplib_mem_chunk_t *post_modded = NULL;
-    cplib_mem_chunk_t *key = NULL;
     cplib_mem_chunk_t *unpadded = NULL;
-    cplib_cipher_base_t *cipher;
-    cplib_block_iterator_base_t *block_iterator;
-    cplib_key_provider_base_t *key_provider;
-    cplib_block_padder_base_t *block_padder;
-    cplib_mode_base_t *mode;
-    cplib_writer_base_t *writer;
-    size_t expected_block_size;
-    size_t cur_block_size;
 
     // shush compiler warning in release build
     (void) cur_block_size;
 
-    expected_block_size = self->block_size;
     block_iterator = self->block_iterator;
-    key_provider = self->key_provider;
-    block_padder = self->block_padder;
-    mode = self->mode;
 
     LOG_VERBOSE("Checking if empty\n");
 
@@ -60,69 +229,35 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
         LOG_VERBOSE("Got block\n");
 
         do {
-            cipher = self->cipher_factory->allocate(self->cipher_factory);
-            if (cipher == NULL) {
-                LOG_MSG("Failed to allocate cipher.\n");
-                return -1;
+            ret = set_to_process_message(self, &cipher, &key, &empty);
+            if (ret != CPLIB_ERR_SUCCESS) {
+                goto cleanup;
             }
 
-            cipher->initialize(cipher, self->_cipher);
-            CPLIB_PUT_IF_EXISTS(self->_cipher);
-            self->_cipher = cipher;
             if (extra) {
                 LOG_VERBOSE("Got extra\n");
 
                 // extra won't be anything but NULL until the last block and if data % key length == 0
                 // swap extra into block. We are done, so it shouldn't matter if the chunk were to be smaller
-                block = extra;
+                block->recycle(block, extra->mem, extra->taken);
             }
 
 
-            ret = block_iterator->is_empty(block_iterator, &empty);
+            LOG_VERBOSE("Set to process message\n");
+
+            ret = evaluate_padding(self, empty, block, &extra, &padded);
             if (ret != CPLIB_ERR_SUCCESS) {
-                LOG_MSG("ERROR: Failed to get block. ret=%d\n", ret);
                 goto cleanup;
             }
 
-            ret = key_provider->next(key_provider, (void **) &key);
+            LOG_VERBOSE("Processed padding\n");
+
+            ret = evaluate_pre_cipher_mode(self, key, padded, &pre_modded);
             if (ret != CPLIB_ERR_SUCCESS) {
-                LOG_MSG("ERROR: Failed to get key. ret=%d\n", ret);
                 goto cleanup;
             }
 
-            LOG_VERBOSE("Got key\n");
-
-            if (block_padder && block_padder->pad && empty && !extra) {
-
-                ret = block_padder->pad(block_padder, block, expected_block_size, &padded, &extra);
-                if (ret != CPLIB_ERR_SUCCESS) {
-                    LOG_MSG("ERROR: Failed to pad block. ret=%d\n", ret);
-                    goto cleanup;
-                }
-                LOG_VERBOSE("Padded\n");
-
-            } else {
-                if (extra) {
-                    extra = NULL;
-                }
-                padded = block;
-                cplib_destroyable_hold(block);
-            }
-
-
-            if (!mode) {
-                cplib_destroyable_hold(padded);
-                pre_modded = padded;
-            } else {
-                ret = mode->pre_cipher_transform(mode, padded, key, self->block_position, &pre_modded);
-                if (ret != CPLIB_ERR_SUCCESS) {
-                    LOG_MSG("ERROR: Failed to apply pre-cipher mode transform. ret=%d\n", ret);
-                    goto cleanup;
-                }
-                LOG_VERBOSE("Pre-modded\n");
-            }
-
-            CPLIB_PUT_IF_EXISTS(padded);
+            LOG_VERBOSE("Processed mode pre-cipher\n");
 
             ret = cipher->process((cplib_destroyable_t *) cipher, pre_modded, key, self->block_position, &processed);
             if (ret != CPLIB_ERR_SUCCESS) {
@@ -130,49 +265,37 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
                 goto cleanup;
             }
 
-            LOG_VERBOSE("Processed\n");
+            LOG_VERBOSE("Processed cipher\n");
 
-            if (!mode) {
-                post_modded = processed;
-                cplib_destroyable_hold(processed);
-            } else {
-                ret = mode->post_cipher_transform(mode, processed, block, key, self->block_position, &post_modded);
-                if (ret != CPLIB_ERR_SUCCESS) {
-                    LOG_MSG("ERROR: Failed to apply post-cipher mode transform. ret=%d\n", ret);
-                    goto cleanup;
-                }
-                LOG_VERBOSE("Post-modded\n");
+            ret = evaluate_post_cipher_mode(self, key, block, processed, &post_modded);
+            if (ret != CPLIB_ERR_SUCCESS) {
+                goto cleanup;
             }
 
+            LOG_VERBOSE("Processed mode post-cipher\n");
 
-            CPLIB_PUT_IF_EXISTS(pre_modded);
             CPLIB_PUT_IF_EXISTS(key);
 
-            if (block_padder && block_padder->unpad && empty) {
-                ret = block_padder->unpad(block_padder, post_modded, &unpadded);
-                if (ret != CPLIB_ERR_SUCCESS) {
-                    LOG_MSG("ERROR: Failed to unpad block. ret=%d\n", ret);
-                    goto cleanup;
-                }
-                LOG_VERBOSE("Unpadded\n");
-            } else {
-                unpadded = post_modded;
-                cplib_destroyable_hold(post_modded);
+            ret = evaluate_unpadding(self, empty, post_modded, &unpadded);
+            if (ret != CPLIB_ERR_SUCCESS) {
+                goto cleanup;
             }
 
-            CPLIB_PUT_IF_EXISTS(block);
-            CPLIB_PUT_IF_EXISTS(post_modded);
+            LOG_VERBOSE("Processed unpadding\n");
 
             ret = writer->write(writer, unpadded);
             if (ret != CPLIB_ERR_SUCCESS) {
                 LOG_MSG("ERROR: Failed to write. ret=%d\n", ret);
                 goto cleanup;
             }
-            LOG_VERBOSE("Wrote\n");
 
-            LOG_DEBUG("Cipher driver finished a chunk of size: %zu.\n", cur_block_size);
-
-            CPLIB_PUT_IF_EXISTS(unpadded);
+            LOG_DEBUG("Cipher driver wrote a chunk of size: %zu.\n", cur_block_size);
+            block->taken = 0;
+            padded->taken = 0;
+            pre_modded->taken = 0;
+            processed->taken = 0;
+            post_modded->taken = 0;
+            unpadded->taken = 0;
         } while (extra); // if we have an extra block we need to process that before moving on
 
     }
@@ -189,7 +312,6 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
     CPLIB_PUT_IF_EXISTS(post_modded);
     CPLIB_PUT_IF_EXISTS(unpadded);
     CPLIB_PUT_IF_EXISTS(key);
-    CPLIB_PUT_IF_EXISTS(self->_cipher);
     writer->close(writer);
 
     return ret;

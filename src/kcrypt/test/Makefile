@@ -19,7 +19,7 @@ clean: clean_test_results
 
 .PHONY: kcrypt
 kcrypt: FORCE
-	./build_exe.sh
+	./build_exe.sh CPLIB_DEBUG
 
 .PHONY: debug
 debug: FORCE

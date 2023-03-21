@@ -193,7 +193,7 @@ int cbc_mode_parse_args(int argc, const char **argv, size_t block_iteration_size
         return CPLIB_ERR_ARG;
     }
 
-    ret = cplib_read_file(argv[2], initialization_vector);
+    ret = cplib_read_file(argv[2], &iv);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Failed to get initialization vector from file\n");
         strcpy(error_text, "Failed to read initialization vector");
@@ -201,12 +201,14 @@ int cbc_mode_parse_args(int argc, const char **argv, size_t block_iteration_size
         return ret;
     }
 
-    if ((*initialization_vector)->taken != block_iteration_size) {
+    if (iv->taken != block_iteration_size) {
         LOG_DEBUG("Initialization vector must be of size: %zu\n", block_iteration_size);
         sprintf(error_text, "Initialization vector must be of size: %zu\n", block_iteration_size);
-        cplib_destroyable_put(*initialization_vector);
+        cplib_destroyable_put(iv);
         return CPLIB_ERR_ARG;
     }
+
+    *initialization_vector = iv;
 
     return CPLIB_ERR_SUCCESS;
 }
