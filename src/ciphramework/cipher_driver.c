@@ -136,9 +136,7 @@ int evaluate_post_cipher_mode(cplib_cipher_driver_t *driver,
             LOG_MSG("ERROR: Out of memory\n");
             return CPLIB_ERR_MEM;
         }
-
         pm->recycle(pm, processed->mem, processed->taken);
-
     } else {
         ret = driver->mode->post_cipher_transform(driver->mode, processed, block, key, driver->block_position, &pm);
         if (ret != CPLIB_ERR_SUCCESS) {
@@ -154,10 +152,10 @@ int evaluate_post_cipher_mode(cplib_cipher_driver_t *driver,
 
 int evaluate_unpadding(cplib_cipher_driver_t *driver,
                        int empty,
-                       cplib_mem_chunk_t * post_modded,
-                       cplib_mem_chunk_t ** unpadded) {
+                       cplib_mem_chunk_t *post_modded,
+                       cplib_mem_chunk_t **unpadded) {
     int ret;
-    cplib_mem_chunk_t * u;
+    cplib_mem_chunk_t *u;
 
     u = *unpadded;
 
@@ -227,7 +225,7 @@ int cipher_driver_run(cplib_cipher_driver_t *self) {
             goto cleanup;
         }
         cur_block_size = block->taken;
-        LOG_VERBOSE("Got block\n");
+        LOG_VERBOSE("Got block of size: %zu\n", cur_block_size);
 
         do {
             ret = set_to_process_message(self, &cipher, &key, &empty);

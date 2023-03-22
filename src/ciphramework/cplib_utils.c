@@ -710,16 +710,18 @@ int pkcs5_block_unpad(cplib_block_padder_base_t *self, cplib_mem_chunk_t *data, 
     data_mem = data->mem;
     pad_len = data_mem[data->taken - 1];
     unpadded_block_len = data->taken - pad_len;
+    unpadded = *unpadded_ptr;
 
-    if (!*unpadded_ptr) {
-        *unpadded_ptr = cplib_allocate_mem_chunk(unpadded_block_len);
-        if (!*unpadded_ptr) {
+
+    if (!unpadded) {
+        unpadded = cplib_allocate_mem_chunk(unpadded_block_len);
+    }
+
+    if (!unpadded) {
             LOG_DEBUG("Failed to allocate memory for unpadded block\n");
             return CPLIB_ERR_MEM;
         }
-    }
 
-    unpadded = *unpadded_ptr;
 
     if (unpadded->size < unpadded_block_len) {
         LOG_DEBUG("Passed unpadded block size is not large enough to accommodate unpadded block. %zu!= %zu\n",
@@ -732,6 +734,7 @@ int pkcs5_block_unpad(cplib_block_padder_base_t *self, cplib_mem_chunk_t *data, 
 
     unpadded->taken = unpadded_block_len;
 
+    *unpadded_ptr = unpadded;
     LOG_DEBUG("Unpadded block of length: %zu\n", unpadded_block_len);
     return CPLIB_ERR_SUCCESS;
 }

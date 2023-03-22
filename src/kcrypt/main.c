@@ -807,5 +807,3 @@ int main(int argc, char **argv) {
 
     return ret;
 }
-
-// TODO NULL check failing for some reason. Also, memory leak in parse args message var. allocd block iterator should split lazily

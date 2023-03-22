@@ -2,6 +2,19 @@
  * Karel Chanivecky 2023.
  */
 
+/*
+ * Expected key avalanche effect for a bit in position 1 in the first round
+ *
+ * 1  2  3  4  5  6  7  8
+ * 1  25 9 17  1 25  9 17
+ *    2 26 10 18  2 26 10
+ *       3 27 11 19  3 27
+ *          4 28 12 20  4
+ *            5  29 13 21
+ *                6 30 14
+ *                  7  31
+ *                      8
+ */
 
 #include <dc_utils/dlinked_list.h>
 #include <string.h>
@@ -12,7 +25,7 @@
 static char error_text[KCRYPT_ERROR_TEXT_MAX_LENGTH] = {0};
 
 typedef uint32_t feisty_key_t;
-
+static int LAST_BIT_SHIFT_SIZE = (sizeof(feisty_key_t) * 8) - 1;
 static const feisty_key_t DEFAULT_ROUND_KEYS[] = {
         0xdddddddd,
         0xeeeeeeee,
@@ -26,6 +39,7 @@ static const feisty_key_t DEFAULT_ROUND_KEYS[] = {
 
 struct feisty_options_t {
     cplib_mem_chunk_t **keys;
+    enum cplib_proc_type process;
 };
 
 typedef struct feisty_options_t feisty_options_t;
@@ -47,16 +61,17 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
     cplib_mem_chunk_t *processed;
 
     block_manipulator = cplib_simple_block_manipulator_new();
-    if (!*processed_ptr) {
-        *processed_ptr = cplib_allocate_mem_chunk(key->taken);
-        if (!*processed_ptr) {
-            LOG_DEBUG("Failed to allocate memory for processed data\n");
-            ret = CPLIB_ERR_MEM;
-            goto cleanup;
-        }
+    processed = *processed_ptr;
+
+    if (!processed) {
+        processed = cplib_allocate_mem_chunk(key->taken);
     }
 
-    processed = *processed_ptr;
+    if (!processed) {
+        LOG_DEBUG("Failed to allocate memory for processed data\n");
+        ret = CPLIB_ERR_MEM;
+        goto cleanup;
+    }
 
     if (processed->size < key->taken) {
         LOG_DEBUG("Passed processed counter is smaller than needed. given %zu < needed %zu\n", processed->size,
@@ -68,9 +83,9 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
     mem = data->mem;
     temp = mem[0];
     mem[0] = mem[2];
-    mem[0] = mem[2];
     mem[2] = mem[1];
-    mem[1] = temp;
+    mem[1] = mem[3];
+    mem[3] = temp;
     ret = block_manipulator->xor(block_manipulator, data, key, processed_ptr);
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_DEBUG("Failed to xor data\n");
@@ -78,6 +93,8 @@ int feisty_cipher_proc_function(cplib_destroyable_t *base_self,
     }
 
     ret = CPLIB_ERR_SUCCESS;
+
+    *processed_ptr = processed;
 
     cleanup:
     CPLIB_PUT_IF_EXISTS(block_manipulator);
@@ -93,13 +110,55 @@ int feisty_cipher_round_function(cplib_destroyable_t *round_f_self,
     return feisty_cipher_proc_function(round_f_self, data, key, position, processed_ptr);
 }
 
-int feisty_cipher_round_key_provider_initialize(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t *root_key) {
+int load_round_keys(const feisty_key_t *round_keys) {
+    int ret;
+    int i;
+    cplib_mem_chunk_t *key;
 
-    if (root_key->taken != sizeof(uint32_t)) {
-        LOG_DEBUG("This cipher requires a %zub key\n", sizeof(uint32_t) * 8);
-        sprintf(error_text, "This cipher requires a %zub key\n", sizeof(uint32_t) * 8);
-        return CPLIB_ERR_KEY_SIZE;
+    options.keys = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 8);
+    if (!options.keys) {
+        LOG_DEBUG("Failed to allocate memory for round key\n");
+        strcpy(error_text, "Out of memory");
+        return CPLIB_ERR_MEM;
     }
+
+    for (i = 0; i < 8; i++) {
+        key = cplib_allocate_mem_chunk(sizeof(feisty_key_t));
+        if (!key) {
+            LOG_DEBUG("Failed to allocate memory for round key\n");
+            strcpy(error_text, "Out of memory");
+            ret = CPLIB_ERR_MEM;
+            goto error_cleanup;
+        }
+
+        key->append(key, &round_keys[i], sizeof(feisty_key_t));
+
+        if (options.process == CPLIB_PROC_DECRYPT) {
+            options.keys[8 - 1 - i] = key;
+        } else {
+            options.keys[i] = key;
+        }
+    }
+
+    return CPLIB_ERR_SUCCESS;
+
+    error_cleanup:
+
+    for (i -= 1; i >= 0; i--) {
+        options.keys[i]->destroy(options.keys[i]);
+    }
+
+    cplib_free(options.keys);
+
+    return ret;
+}
+
+
+int feisty_cipher_round_key_provider_initialize(cplib_round_key_provider_base_t *self, cplib_mem_chunk_t *root_key) {
+    int ret;
+    feisty_key_t keys[8] = {0};
+    feisty_key_t key_val;
+    uint8_t left_bit;
 
     if (options.keys) {
         self->round_keys_count = 8;
@@ -108,20 +167,32 @@ int feisty_cipher_round_key_provider_initialize(cplib_round_key_provider_base_t 
         return CPLIB_ERR_SUCCESS;
     }
 
-    self->next = (cplib_next_item_f) cplib_round_key_provider_same;
-    self->round_index = 8;
-    self->round_keys_count = 1;
-    self->round_keys = cplib_malloc(sizeof(cplib_mem_chunk_t*));
-    if (!self->round_keys) {
-        LOG_DEBUG("Failed to allocate memory for round keys");
-        strcpy(error_text, "Out of memory");
-        return CPLIB_ERR_MEM;
+
+    if (root_key->taken != sizeof(feisty_key_t)) {
+        LOG_DEBUG("This cipher requires a %zub key\n", sizeof(feisty_key_t) * 8);
+        sprintf(error_text, "This cipher requires a %zub key", sizeof(feisty_key_t) * 8);
+        return CPLIB_ERR_KEY_SIZE;
     }
 
-    cplib_destroyable_hold(root_key);
-    self->round_keys[0] = root_key;
+    key_val = *(feisty_key_t *) (root_key->mem);
 
-    return CPLIB_ERR_SUCCESS;
+    for (size_t i = 0; i < 8; i++) {
+        // rotate left
+        for (int j = 0; j < 5; j++) {
+            left_bit = ((key_val & (1 << LAST_BIT_SHIFT_SIZE)) >> LAST_BIT_SHIFT_SIZE);
+            key_val <<= 1;
+            key_val |= left_bit;
+        }
+        keys[0] = key_val;
+    }
+
+    ret = load_round_keys(keys);
+
+    if (ret != CPLIB_ERR_SUCCESS) {
+        return ret;
+    }
+
+    return feisty_cipher_round_key_provider_initialize(self, root_key);
 }
 
 
@@ -130,7 +201,6 @@ cplib_key_provider_base_t *allocate_key_provider(cplib_key_provider_factory_base
     return (cplib_key_provider_base_t *) cplib_round_key_provider_new2(
             (cplib_mem_chunk_func) feisty_cipher_round_key_provider_initialize);
 }
-
 
 cplib_cipher_base_t *allocate_feisty_cipher(cplib_cipher_factory_base_t *self) {
     CPLIB_UNUSED_PARAM(self);
@@ -195,50 +265,7 @@ cplib_key_provider_base_t *feisty_cipher_allocate_key_provider(void) {
     return key_provider;
 }
 
-int load_round_keys(const feisty_key_t *round_keys, enum cplib_proc_type process) {
-    int ret;
-    int i;
-    cplib_mem_chunk_t *key;
-
-    options.keys = cplib_malloc(sizeof(cplib_mem_chunk_t *) * 8);
-    if (!options.keys) {
-        LOG_DEBUG("Failed to allocate memory for round key\n");
-        strcpy(error_text, "Out of memory");
-        return CPLIB_ERR_MEM;
-    }
-
-    for (i = 0; i < 8; i++) {
-        key = cplib_allocate_mem_chunk(sizeof(feisty_key_t));
-        if (!key) {
-            LOG_DEBUG("Failed to allocate memory for round key\n");
-            strcpy(error_text, "Out of memory");
-            ret = CPLIB_ERR_MEM;
-            goto error_cleanup;
-        }
-
-        key->append(key, &round_keys[i], sizeof(feisty_key_t));
-
-        if (process == CPLIB_PROC_DECRYPT) {
-            options.keys[8 - 1 - i] = key;
-        } else {
-            options.keys[i] = key;
-        }
-    }
-
-    return CPLIB_ERR_SUCCESS;
-
-    error_cleanup:
-
-    for (i -= 1; i >= 0; i--) {
-        options.keys[i]->destroy(options.keys[i]);
-    }
-
-    cplib_free(options.keys);
-
-    return ret;
-}
-
-int parse_options(int argc, const char **argv, enum cplib_proc_type process) {
+int parse_options(int argc, const char **argv) {
     int ret;
     feisty_key_t round_keys[8] = {0};
     unsigned long long key;
@@ -256,7 +283,12 @@ int parse_options(int argc, const char **argv, enum cplib_proc_type process) {
 
     if (argv[1][1] == 'd') {
         LOG_DEBUG("Using default round keys\n");
-        return load_round_keys(DEFAULT_ROUND_KEYS, process);
+        return load_round_keys(DEFAULT_ROUND_KEYS);
+    }
+
+    if (argv[1][1] == '-') {
+        LOG_DEBUG("Passed no options\n");
+        return CPLIB_ERR_SUCCESS;
     }
 
     if (argv[1][1] != 'r') {
@@ -281,7 +313,7 @@ int parse_options(int argc, const char **argv, enum cplib_proc_type process) {
         round_keys[i - 2] = key;
     }
 
-    return load_round_keys(round_keys, process);
+    return load_round_keys(round_keys);
 }
 
 
@@ -297,11 +329,12 @@ int feisty_cipher_get_suite(
 
     int ret;
 
-    ret = parse_options(argc, argv, proc_type);
+    options.process = proc_type;
+
+    ret = parse_options(argc, argv);
     if (ret != CPLIB_ERR_SUCCESS) {
         return ret;
     }
-
 
     *cipher_factory = (cplib_cipher_factory_base_t *) feisty_cipher_get_cipher_factory();
     if (!*cipher_factory) {

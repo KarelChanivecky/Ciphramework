@@ -11,20 +11,6 @@
 
 #include "cplib_mem.h"
 
-/**
- *
- * TODO
- *  IMPLEMENTATION
- *   - Key expansion
- *   - CBC
- *   - CTR
- *  BUG
- *   35/2720 testing plaintext, key combination: text-len=10.txt, binary-32b-0.txt
- *    ERROR: Failed to unpad block. ret=7
- *      Failed to process message
- *   KCrypt failed. Code: 7
- */
-
 // ------------------------------------------------------------------------
 
 enum cplib_base_error_codes {
