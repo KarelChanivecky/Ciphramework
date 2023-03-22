@@ -303,7 +303,7 @@ int parse_options(int argc, const char **argv) {
         return CPLIB_ERR_ARG;
     }
 
-    for (int i = 2; i < argc; i++) {
+    for (int i = 2; i < 10; i++) {
         ret = cplib_safe_strtoull(argv[i], NULL, 16, &key);
         if (ret != CPLIB_ERR_SUCCESS) {
             LOG_DEBUG("Failed to parse key: %s\n", argv[i]);
@@ -313,7 +313,14 @@ int parse_options(int argc, const char **argv) {
         round_keys[i - 2] = key;
     }
 
-    return load_round_keys(round_keys);
+    ret = load_round_keys(round_keys);
+    if (ret != CPLIB_ERR_SUCCESS) {
+        LOG_DEBUG("Failed to parse cipher options\n");
+        return ret;
+    }
+    LOG_VERBOSE("Parse cipher options\n");
+
+    return CPLIB_ERR_SUCCESS;
 }
 
 
@@ -347,6 +354,8 @@ int feisty_cipher_get_suite(
         *cipher_factory = NULL;
         return CPLIB_ERR_MEM;
     }
+
+    LOG_VERBOSE("Cipher ready to run\n");
 
     return CPLIB_ERR_SUCCESS;
 }

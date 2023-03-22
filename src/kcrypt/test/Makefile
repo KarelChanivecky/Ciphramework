@@ -3,6 +3,7 @@ CIPHER_ARGS := ${CIPHER_ARGS}
 MODE := ${MODE}
 MODE_ARGS := ${MODE_ARGS}
 BUILD_TYPE := ${BUILD_TYPE}
+ROUND_KEYS := ${ROUND_KEYS}
 
 .PHONY: force_clean_test_results
 force_clean_test_results: FORCE
@@ -82,6 +83,22 @@ test_feisty.configurable_round_key_ctr_def_rkey: force_clean_test_results kcrypt
 .PHONY: test_feisty.configurable_round_key_def_rkey
 test_feisty.configurable_round_key_def_rkey: test_feisty.configurable_round_key_ecb_def_rkey test_feisty.configurable_round_key_ctr_def_rkey test_feisty.configurable_round_key_ctr_def_rkey
 
+.PHONY: test_feisty.configurable_round_key_given_ecb
+test_feisty.configurable_round_key_given_ecb: force_clean_test_results kcrypt
+	./test.sh feisty.configurable_round_key "-- CIPHER -r ${ROUND_KEYS}"
+
+.PHONY: test_feisty.configurable_round_key_given_cbc
+test_feisty.configurable_round_key_given_cbc: force_clean_test_results kcrypt
+	./test.sh feisty.configurable_round_key "-- CIPHER -r ${ROUND_KEYS}" CBC "-- MODE -f ./iv/binary-64b-16891392968528426633.txt"
+
+.PHONY: test_feisty.configurable_round_key_given_ctr
+test_feisty.configurable_round_key_given_ctr: force_clean_test_results kcrypt
+	./test.sh feisty.configurable_round_key "-- CIPHER  -r ${ROUND_KEYS}" CTR "-- MODE -f ./iv/binary-64b-16891392968528426633.txt -c 1"
+
+.PHONY: test_feisty.configurable_round_key_given
+test_feisty.configurable_round_key_given: test_feisty.configurable_round_key_given_ecb test_feisty.configurable_round_key_given_ctr test_feisty.configurable_round_key_given_ctr
+
+
 .PHONY: test_feisty.configurable_round_key_ecb
 test_feisty.configurable_round_key_ecb: force_clean_test_results kcrypt
 	./test.sh feisty.configurable_round_key
@@ -96,8 +113,9 @@ test_feisty.configurable_round_key_ctr: force_clean_test_results kcrypt
 
 .PHONY: test_feisty.configurable_round_key
 test_feisty.configurable_round_key: test_feisty.configurable_round_key_ecb test_feisty.configurable_round_key_ctr test_feisty.configurable_round_key_ctr
+
 .PHONY: test_all
-test_all: test_xor test_feisty.no_round_key test_feisty.configurable_round_key test_feisty.configurable_round_key_def_rkey
+test_all: test_xor test_feisty.no_round_key test_feisty.configurable_round_key test_feisty.configurable_round_key_def_rkey test_feisty.configurable_round_key_given
 
 .PHONY: test_custom
 test_custom: clean_n_build
