@@ -2,6 +2,7 @@
  * Karel Chanivecky 2023.
  */
 
+#include <string.h>
 #include "kcrypt.h"
 #include "cplib_utils.h"
 #include "cplib_log.h"
@@ -27,12 +28,14 @@ int ECB_get_mode(int argc,
     *effective_process = process;
     if (process != CPLIB_PROC_ENCRYPT && process != CPLIB_PROC_DECRYPT) {
         LOG_DEBUG("Invalid process type\n");
+        strcpy(error_text, "Invalid process type");
         return CPLIB_ERR_ARG;
     }
 
     *padder = cplib_pkcs5_padder_new(process);
     if (*padder == NULL) {
         LOG_DEBUG("Failed to allocate padder\n");
+        strcpy(error_text, "Out of memory");
         return CPLIB_ERR_MEM;
     }
 

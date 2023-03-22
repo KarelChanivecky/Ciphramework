@@ -182,6 +182,7 @@ int cbc_mode_parse_args(int argc, const char **argv, size_t block_iteration_size
         if (iv->taken != block_iteration_size) {
             LOG_DEBUG("Given initialization vector size does not match the block size\n");
             cplib_destroyable_put(iv);
+            sprintf(error_text, "Initialization vector is not the needed size: %zu", block_iteration_size);
             return CPLIB_ERR_ARG;
         }
         return CPLIB_ERR_SUCCESS;
@@ -230,6 +231,7 @@ int cbc_get_mode(int argc,
 
     if (process != CPLIB_PROC_ENCRYPT && process != CPLIB_PROC_DECRYPT) {
         LOG_DEBUG("Invalid process type\n");
+        strcpy(error_text, "Invalid process type");
         return CPLIB_ERR_ARG;
     }
 

@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 17)
 include(FetchContent)
 FetchContent_Declare(
         dc_utils
-        GIT_REPOSITORY git@github.com:KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
+        GIT_REPOSITORY https://github.com/KarelChanivecky/BCIT_datacomm_C_language_data_structures.git
         GIT_TAG main
 )
 FetchContent_MakeAvailable(dc_utils)
@@ -27,14 +27,14 @@ include_directories(
 )
 
 add_library(
-        ciphramework SHARED
+        ciphramework STATIC
         src/ciphramework/cplib_mem.c
         src/ciphramework/base_objects.c
         src/ciphramework/cplib_utils.c
         src/ciphramework/cipher_driver.c
 )
 
-target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -D${CPLIB_BUILD_TYPE})
+target_compile_options(ciphramework PRIVATE -Wpedantic -Wall -Wextra -fms-extensions -fPIC -D${CPLIB_BUILD_TYPE})
 
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 # CIPHERS

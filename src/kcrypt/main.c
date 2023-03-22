@@ -151,6 +151,7 @@ void print_usage(void) {
             "\n"
             "%s help <cipher | mode>\n"
             "list available ciphers or modes\n"
+            "ATTENTION: this is only supported by running kcrypt from the same dir where it is contained. Getting help for a specific module works from any dir\n"
             "\n"
             "%s help < cipher <cipher name> | mode <mode name> >\n"
             "Get help on a specific cipher or mode\n"
@@ -226,6 +227,7 @@ int validate_mode_selection(const char *chosen_mode, char **accepted_modes, unsi
         return CPLIB_ERR_SUCCESS;
     }
 
+    LOG_MSG("Mode is not accepted for this cipher\n");
     return CPLIB_ERR_ARG;
 }
 
@@ -281,7 +283,7 @@ int find_module_args(char *header, int argc, char **argv, int *module_argc, char
             return CPLIB_ERR_SUCCESS;
         }
     }
-
+    LOG_DEBUG("Found no arguments for module: %s", header);
     return CPLIB_ERR_ARG;
 }
 
@@ -514,6 +516,7 @@ int process_parsed_args(void) {
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to initialize mode\n");
         if (ret == CPLIB_ERR_ARG) {
+            LOG_MSG("Incorrect mode usage\n");
             print_lib_usage(KCRYPT_MODE_LIB_DIR, options.mode);
         }
         goto error_cleanup;
@@ -535,6 +538,7 @@ int process_parsed_args(void) {
     if (ret != CPLIB_ERR_SUCCESS) {
         LOG_MSG("Failed to initialize cipher\n");
         if (ret == CPLIB_ERR_ARG) {
+            LOG_MSG("Incorrect cipher usage\n");
             print_lib_usage(KCRYPT_CIPHER_LIB_DIR, options.cipher);
         }
         goto error_cleanup;
@@ -604,6 +608,7 @@ int parse_args(int argc, char **argv) {
      */
     exe_name = argv[0];
     if (argc < 3) {
+        LOG_MSG("Did not provide sufficient arguments\n");
         print_usage();
         return CPLIB_ERR_ARG;
     }
