@@ -182,6 +182,7 @@ int print_available_libs(char *lib_type_name) {
         for (size_t j = available_libs[i]->size - 1; j > 0; j--) {
             if (lib_name[j] == '.') {
                 lib_name[j] = '\0';
+                break;
             }
         }
 
