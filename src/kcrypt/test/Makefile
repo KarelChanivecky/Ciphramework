@@ -66,7 +66,7 @@ test_feisty.no_round_key_ctr: force_clean_test_results kcrypt
 	./test.sh feisty.no_round_key "-- CIPHER" CTR "-- MODE -f ./iv/binary-64b-16891392968528426633.txt -c 1"
 
 .PHONY: test_feisty.no_round_key
-test_feisty.no_round_key: test_feisty.no_round_key_ecb test_feisty.no_round_key_ctr test_feisty.no_round_key_ctr
+test_feisty.no_round_key: test_feisty.no_round_key_ecb test_feisty.no_round_key_ctr test_feisty.no_round_key_cbc
 
 .PHONY: test_feisty.configurable_round_key_ecb_def_rkey 
 test_feisty.configurable_round_key_ecb_def_rkey: force_clean_test_results kcrypt
@@ -81,7 +81,7 @@ test_feisty.configurable_round_key_ctr_def_rkey: force_clean_test_results kcrypt
 	./test.sh feisty.configurable_round_key "-- CIPHER -d" CTR "-- MODE -f ./iv/binary-64b-16891392968528426633.txt -c 1"
 
 .PHONY: test_feisty.configurable_round_key_def_rkey
-test_feisty.configurable_round_key_def_rkey: test_feisty.configurable_round_key_ecb_def_rkey test_feisty.configurable_round_key_ctr_def_rkey test_feisty.configurable_round_key_ctr_def_rkey
+test_feisty.configurable_round_key_def_rkey: test_feisty.configurable_round_key_ecb_def_rkey test_feisty.configurable_round_key_ctr_def_rkey test_feisty.configurable_round_key_cbc_def_rkey
 
 .PHONY: test_feisty.configurable_round_key_given_ecb
 test_feisty.configurable_round_key_given_ecb: force_clean_test_results kcrypt
@@ -96,7 +96,7 @@ test_feisty.configurable_round_key_given_ctr: force_clean_test_results kcrypt
 	./test.sh feisty.configurable_round_key "-- CIPHER  -r ${ROUND_KEYS}" CTR "-- MODE -f ./iv/binary-64b-16891392968528426633.txt -c 1"
 
 .PHONY: test_feisty.configurable_round_key_given
-test_feisty.configurable_round_key_given: test_feisty.configurable_round_key_given_ecb test_feisty.configurable_round_key_given_ctr test_feisty.configurable_round_key_given_ctr
+test_feisty.configurable_round_key_given: test_feisty.configurable_round_key_given_ecb test_feisty.configurable_round_key_given_ctr test_feisty.configurable_round_key_given_cbc
 
 
 .PHONY: test_feisty.configurable_round_key_ecb
@@ -112,7 +112,7 @@ test_feisty.configurable_round_key_ctr: force_clean_test_results kcrypt
 	./test.sh feisty.configurable_round_key "-- CIPHER" CTR "-- MODE -f ./iv/binary-64b-16891392968528426633.txt -c 1"
 
 .PHONY: test_feisty.configurable_round_key
-test_feisty.configurable_round_key: test_feisty.configurable_round_key_ecb test_feisty.configurable_round_key_ctr test_feisty.configurable_round_key_ctr
+test_feisty.configurable_round_key: test_feisty.configurable_round_key_ecb test_feisty.configurable_round_key_ctr test_feisty.configurable_round_key_cbc
 
 .PHONY: test_all
 test_all: test_xor test_feisty.no_round_key test_feisty.configurable_round_key test_feisty.configurable_round_key_def_rkey test_feisty.configurable_round_key_given
