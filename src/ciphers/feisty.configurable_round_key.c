@@ -16,7 +16,6 @@
  *                      8
  */
 
-#include <dc_utils/dlinked_list.h>
 #include <string.h>
 #include "kcrypt.h"
 #include "cplib_utils.h"
